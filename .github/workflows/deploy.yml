@@ -29,7 +29,7 @@ jobs:
           dockerfilePath: Dockerfile.cpu
           containerAppName: unweave-backend
           resourceGroup: unweave-rg
-          acrName: unweaveregistry
+          acrName: unweavergistry
           environmentVariables: DEVICE_OVERRIDE=cpu
 
       - name: Build & Deploy Frontend
@@ -38,4 +38,4 @@ jobs:
           appSourcePath: ${{ github.workspace }}/frontend
           containerAppName: unweave-frontend
           resourceGroup: unweave-rg
-          acrName: unweaveregistry
+          acrName: unweavergistry
