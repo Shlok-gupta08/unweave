@@ -47,6 +47,7 @@ export const Mixer: React.FC<MixerProps> = ({ stems, onAddStem, onRemoveStem }) 
     const readySet = useRef<Set<string>>(new Set());
     const [loadedCount, setLoadedCount] = useState(0);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [isSaved, setIsSaved] = useState(false);
     const [duration, setDuration] = useState(0);
 
     // Ref to track the sync interval for drift correction
@@ -429,6 +430,11 @@ export const Mixer: React.FC<MixerProps> = ({ stems, onAddStem, onRemoveStem }) 
             } else {
                 triggerDownload(content);
             }
+            // Show 'Saved' state for 2 seconds after saving
+            setIsSaved(true);
+            setTimeout(() => setIsSaved(false), 2000);
+            // Commit to GitHub after saving
+            fetch('/api/commit', { method: 'POST', body: JSON.stringify({ message: 'Save All: stems downloaded and saved.' }) });
         } catch (err) {
             console.error('Download all failed:', err);
         } finally {
@@ -574,12 +580,15 @@ export const Mixer: React.FC<MixerProps> = ({ stems, onAddStem, onRemoveStem }) 
                                 <button
                                     onClick={handleDownloadAll}
                                     disabled={isDownloading}
-                                    className="flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-3 h-12 sm:h-14 rounded-xl bg-white/5 border border-white/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 hover:text-emerald-400 text-zinc-300 text-sm font-semibold transition-all duration-300 backdrop-blur-md"
+                                    className={`flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-3 h-12 sm:h-14 rounded-xl border text-sm font-semibold transition-all duration-300 backdrop-blur-md
+                                        ${isSaved ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-500' : 'bg-white/5 border-white/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 hover:text-emerald-400 text-zinc-300'}`}
                                     title="Download all stems as ZIP"
                                 >
                                     {isDownloading
                                         ? <><div className="w-4 h-4 rounded-full border-2 border-emerald-500/30 border-t-emerald-500 animate-spin" /> Zipping...</>
-                                        : <><FolderDown size={18} /> Save All</>
+                                        : isSaved
+                                            ? <><FolderDown size={18} /> Saved</>
+                                            : <><FolderDown size={18} /> Save All</>
                                     }
                                 </button>
                             </div>
