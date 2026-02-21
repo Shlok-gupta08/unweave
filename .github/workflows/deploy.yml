@@ -32,6 +32,7 @@ jobs:
           acrName: unweavergistry
           acrUsername: ${{ secrets.ACR_USERNAME }}
           acrPassword: ${{ secrets.ACR_PASSWORD }}
+          imageToBuild: unweavergistry.azurecr.io/unweave-backend:${{ github.sha }}
           environmentVariables: DEVICE_OVERRIDE=cpu
 
       - name: Build & Deploy Frontend
@@ -43,3 +44,4 @@ jobs:
           acrName: unweavergistry
           acrUsername: ${{ secrets.ACR_USERNAME }}
           acrPassword: ${{ secrets.ACR_PASSWORD }}
+          imageToBuild: unweavergistry.azurecr.io/unweave-frontend:${{ github.sha }}
