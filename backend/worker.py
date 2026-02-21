@@ -32,16 +32,24 @@ def run_worker():
     parser.add_argument("--models_dir", required=True)
     args = parser.parse_args()
 
+    print("worker: Loading model...", file=sys.stderr)
+    
+    # Limit PyTorch CPU threads to avoid severe contention on low-resource environments (like Azure Container Apps)
+    # which can cause the process to hang at "0% / Calculating".
+    import torch
+    if args.device_type == "cpu":
+        torch.set_num_threads(2)
+
     separator_kwargs = {
         "output_dir": args.out_dir,
         "output_format": "mp3",
         "model_file_dir": args.models_dir,
+        "log_level": 10,  # logging.DEBUG to ensure we keep Azure Log Stream active
     }
 
     if args.device_type == "directml":
         separator_kwargs["use_directml"] = True
 
-    print("worker: Loading model...", file=sys.stderr)
     separator = Separator(**separator_kwargs)
     separator.load_model(model_filename="htdemucs_6s.yaml")
 

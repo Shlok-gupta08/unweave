@@ -198,7 +198,7 @@ def get_job(job_id: str) -> dict | None:
 # ============================================================
 # Parse Tqdm from Subprocess
 # ============================================================
-def parse_tqdm_line(line: str, job_id: str):
+def parse_tqdm_line(line: str, job_id: str, is_downloading: bool = False):
     """Extracts progress percentage + ETA from a tqdm stderr line and updates the job."""
     progress_pattern = re.compile(r'(\d+)%\|')
     eta_pattern = re.compile(r'<(\d+):(\d+)')
@@ -214,11 +214,13 @@ def parse_tqdm_line(line: str, job_id: str):
             seconds = int(eta_match.group(2))
             eta_seconds = minutes * 60 + seconds
 
+        msg = f"Downloading model... {pct}%" if is_downloading else f"Separating stems... {pct}%"
+
         update_job(
             job_id,
             progress=pct,
             eta_seconds=eta_seconds,
-            message=f"Separating stems... {pct}%",
+            message=msg,
         )
 
 
@@ -263,10 +265,10 @@ def run_separation(job_id: str, input_path: str, job_out_dir: str, job_temp_dir:
         with processes_lock:
             active_processes[job_id] = process
 
-        # Read stderr to extract tqdm progress (handles \r from tqdm)
         def read_stderr():
             try:
                 buffer = ""
+                is_downloading = False
                 while True:
                     char = process.stderr.read(1)
                     if not char:
@@ -275,13 +277,20 @@ def run_separation(job_id: str, input_path: str, job_out_dir: str, job_temp_dir:
                     if char == '\r' or char == '\n':
                         if buffer:
                             line_stripped = buffer.strip()
-                            if line_stripped and not line_stripped.startswith("100%|") and not line_stripped.startswith("0%|"):
+                            if line_stripped:
+                                # Log everything to keep Azure Log stream alive (prevents AjaxError log drop)
                                 log.info(f"[Worker] {line_stripped}")
                                 
                             if "Downloading" in line_stripped:
-                                update_job(job_id, message="Downloading AI model weights (first run)...")
+                                is_downloading = True
                                 
-                            parse_tqdm_line(buffer, job_id)
+                            parse_tqdm_line(buffer, job_id, is_downloading)
+                            
+                            # If downloading just finished (reached 100%), show loading message
+                            if is_downloading and "100%|" in line_stripped:
+                                is_downloading = False
+                                update_job(job_id, message="Loading AI model into memory (takes 1-2 mins)...", progress=0, eta_seconds=None)
+                                
                             buffer = ""
                     else:
                         buffer += char
