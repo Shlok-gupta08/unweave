@@ -263,15 +263,30 @@ def run_separation(job_id: str, input_path: str, job_out_dir: str, job_temp_dir:
         with processes_lock:
             active_processes[job_id] = process
 
-        # Read stderr line-by-line to extract tqdm progress
+        # Read stderr to extract tqdm progress (handles \r from tqdm)
         def read_stderr():
             try:
-                for line in iter(process.stderr.readline, ''):
-                    if not line:
+                buffer = ""
+                while True:
+                    char = process.stderr.read(1)
+                    if not char:
                         break
-                    parse_tqdm_line(line, job_id)
-            except Exception:
-                pass
+                        
+                    if char == '\r' or char == '\n':
+                        if buffer:
+                            line_stripped = buffer.strip()
+                            if line_stripped and not line_stripped.startswith("100%|") and not line_stripped.startswith("0%|"):
+                                log.info(f"[Worker] {line_stripped}")
+                                
+                            if "Downloading" in line_stripped:
+                                update_job(job_id, message="Downloading AI model weights (first run)...")
+                                
+                            parse_tqdm_line(buffer, job_id)
+                            buffer = ""
+                    else:
+                        buffer += char
+            except Exception as e:
+                log.error(f"Error reading stderr: {e}")
 
         stderr_thread = threading.Thread(target=read_stderr, daemon=True)
         stderr_thread.start()
