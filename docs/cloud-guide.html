@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unweave — Cloud Deployment Guide</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --bg: #0a0a0b;
+            --surface: #111113;
+            --surface-2: #18181b;
+            --border: #27272a;
+            --border-glow: #3f3f46;
+            --text: #fafafa;
+            --text-muted: #a1a1aa;
+            --text-dim: #71717a;
+            --accent: #facc15;
+            --accent-dim: #facc1520;
+            --azure: #0078d4;
+            --azure-dim: #0078d420;
+            --gcp: #34a853;
+            --gcp-dim: #34a85320;
+            --github: #8b5cf6;
+            --github-dim: #8b5cf620;
+            --red: #ef4444;
+            --red-dim: #ef444420;
+            --radius: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            min-height: 100vh;
+        }
+
+        .hero {
+            position: relative;
+            padding: 80px 20px 60px;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--accent-dim) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero h1 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .hero h1 span {
+            background: linear-gradient(135deg, var(--accent), #f59e0b);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 20px 80px;
+        }
+
+        /* Navigation */
+        .nav-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 60px;
+        }
+
+        .nav-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            text-decoration: none;
+            color: var(--text);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .nav-card:hover {
+            border-color: var(--border-glow);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .nav-card .icon {
+            font-size: 1.5rem;
+        }
+
+        .nav-card .title {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .nav-card .desc {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 64px;
+            scroll-margin-top: 40px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-header .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-azure {
+            background: var(--azure-dim);
+            color: var(--azure);
+            border: 1px solid var(--azure);
+        }
+
+        .badge-gcp {
+            background: var(--gcp-dim);
+            color: var(--gcp);
+            border: 1px solid var(--gcp);
+        }
+
+        .badge-github {
+            background: var(--github-dim);
+            color: var(--github);
+            border: 1px solid var(--github);
+        }
+
+        .badge-prereq {
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
+
+        h2 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin: 32px 0 12px;
+            color: var(--text);
+        }
+
+        h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin: 20px 0 8px;
+            color: var(--text-muted);
+        }
+
+        p,
+        li {
+            color: var(--text-muted);
+        }
+
+        p {
+            margin-bottom: 12px;
+        }
+
+        ul,
+        ol {
+            padding-left: 20px;
+            margin-bottom: 16px;
+        }
+
+        li {
+            margin-bottom: 6px;
+        }
+
+        strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        /* Code blocks */
+        .code-block {
+            position: relative;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin: 16px 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            background: var(--surface-2);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .copy-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .copy-btn.copied {
+            border-color: var(--gcp);
+            color: var(--gcp);
+        }
+
+        pre {
+            padding: 16px;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: var(--text);
+        }
+
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--surface-2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            color: var(--accent);
+        }
+
+        pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+        }
+
+        /* Info boxes */
+        .info-box {
+            background: var(--surface);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 var(--radius) var(--radius) 0;
+            padding: 16px 20px;
+            margin: 20px 0;
+        }
+
+        .info-box.warning {
+            border-left-color: var(--red);
+        }
+
+        .info-box.tip {
+            border-left-color: var(--gcp);
+        }
+
+        .info-box strong {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--accent);
+        }
+
+        .info-box.warning strong {
+            color: var(--red);
+        }
+
+        .info-box.tip strong {
+            color: var(--gcp);
+        }
+
+        /* Steps */
+        .step {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin: 16px 0;
+            position: relative;
+        }
+
+        .step-number {
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: var(--accent);
+            color: var(--bg);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.8rem;
+        }
+
+        .step h4 {
+            margin-top: 4px;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+
+        th,
+        td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--surface-2);
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            color: var(--text-muted);
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Architecture diagram */
+        .arch-diagram {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin: 20px 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            white-space: pre;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        @media (max-width: 640px) {
+            .hero {
+                padding: 50px 16px 40px;
+            }
+
+            .nav-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .step {
+                padding: 20px 16px;
+            }
+
+            pre {
+                font-size: 0.78rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="hero">
+        <h1>☁️ <span>Unweave</span> Cloud Deployment</h1>
+        <p>Step-by-step guide to deploy Unweave on Azure or Google Cloud Platform via GitHub, with CI/CD for automatic
+            updates.</p>
+    </div>
+
+    <div class="container">
+
+        <!-- Navigation -->
+        <div class="nav-cards">
+            <a href="#prerequisites" class="nav-card">
+                <span class="icon">⚙️</span>
+                <span class="title">Prerequisites</span>
+                <span class="desc">What you need before starting</span>
+            </a>
+            <a href="#architecture" class="nav-card">
+                <span class="icon">🏗️</span>
+                <span class="title">Architecture</span>
+                <span class="desc">How the containers work together</span>
+            </a>
+            <a href="#azure" class="nav-card" style="border-color: var(--azure);">
+                <span class="icon">🔷</span>
+                <span class="title">Azure</span>
+                <span class="desc">Container Registry + Container Instances</span>
+            </a>
+            <a href="#gcp" class="nav-card" style="border-color: var(--gcp);">
+                <span class="icon">🟢</span>
+                <span class="title">Google Cloud</span>
+                <span class="desc">Artifact Registry + Cloud Run</span>
+            </a>
+            <a href="#github-actions" class="nav-card" style="border-color: var(--github);">
+                <span class="icon">🚀</span>
+                <span class="title">GitHub Actions</span>
+                <span class="desc">CI/CD auto-deploy on push</span>
+            </a>
+            <a href="#costs" class="nav-card">
+                <span class="icon">💰</span>
+                <span class="title">Cost Estimates</span>
+                <span class="desc">Estimated monthly costs per platform</span>
+            </a>
+        </div>
+
+        <!-- Prerequisites -->
+        <div class="section" id="prerequisites">
+            <div class="section-header">
+                <span class="badge badge-prereq">Prerequisites</span>
+                <h2>Before You Start</h2>
+            </div>
+            <ul>
+                <li><strong>GitHub account</strong> with the Unweave repo pushed (public or private)</li>
+                <li><strong>Docker</strong> installed locally (for testing builds)</li>
+                <li><strong>Cloud CLI tools:</strong>
+                    <ul>
+                        <li>Azure: <code>az</code> CLI — <a
+                                href="https://learn.microsoft.com/en-us/cli/azure/install-azure-cli"
+                                style="color:var(--azure)">Install Guide</a></li>
+                        <li>GCP: <code>gcloud</code> CLI — <a href="https://cloud.google.com/sdk/docs/install"
+                                style="color:var(--gcp)">Install Guide</a></li>
+                    </ul>
+                </li>
+                <li><strong>GPU quota</strong> approved on your cloud account (NVIDIA T4 or V100 recommended)</li>
+            </ul>
+
+            <div class="info-box warning">
+                <strong>⚠️ Important</strong>
+                GPU instances require quota approval which can take 24–48 hours. Request GPU quota before starting
+                deployment.
+            </div>
+
+            <h3>Verify Local Docker Build</h3>
+            <p>Before deploying to cloud, make sure both images build successfully locally:</p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span>bash — test local build</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code># Build backend (this takes a while the first time due to PyTorch)
+docker build -t unweave-backend ./backend
+
+# Build frontend (multi-stage: Node build → Nginx serve)
+docker build -t unweave-frontend ./frontend
+
+# Verify images
+docker images | grep unweave</code></pre>
+            </div>
+        </div>
+
+        <!-- Architecture -->
+        <div class="section" id="architecture">
+            <div class="section-header">
+                <span class="badge badge-prereq">Overview</span>
+                <h2>Cloud Architecture</h2>
+            </div>
+            <p>Unweave runs as two containers. The frontend (Nginx) serves the React SPA and reverse-proxies API
+                requests to the backend (FastAPI + PyTorch).</p>
+            <div class="arch-diagram">
+                ┌─────────────────────────────────────────────────────────┐
+                │ User Browser │
+                └──────────────────────────┬──────────────────────────────┘
+                │ HTTPS (port 80/443)
+                ┌──────────────────────────▼──────────────────────────────┐
+                │ Frontend Container (Nginx) │
+                │ │
+                │ • Serves built React SPA (static HTML/JS/CSS) │
+                │ • Reverse-proxies /api/* → backend:8000 │
+                │ • Reverse-proxies /stems/* → backend:8000 │
+                │ • Health: /nginx-health │
+                └──────────────────────────┬──────────────────────────────┘
+                │ internal network
+                ┌──────────────────────────▼──────────────────────────────┐
+                │ Backend Container (FastAPI) │
+                │ │
+                │ • AI separation: htdemucs_6s via PyTorch │
+                │ • GPU: NVIDIA CUDA 12.1 │
+                │ • Serves /health, /separate, /status/{id} │
+                │ • Serves /stems/* (processed audio files) │
+                │ • Health: /health │
+                └─────────────────────────────────────────────────────────┘</div>
+        </div>
+
+        <!-- ───────────── AZURE ───────────── -->
+        <div class="section" id="azure">
+            <div class="section-header">
+                <span class="badge badge-azure">Azure</span>
+                <h2>Deploy to Microsoft Azure</h2>
+            </div>
+
+            <p>Uses <strong>Azure Container Registry (ACR)</strong> to store images and <strong>Azure Container
+                    Instances (ACI)</strong> to run GPU containers.</p>
+
+            <div class="step">
+                <div class="step-number">1</div>
+                <h4>Login & Create Resource Group</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+                    <pre><code># Login to Azure
+az login
+
+# Create a resource group (pick a region with GPU support)
+az group create --name unweave-rg --location eastus</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <h4>Create Azure Container Registry</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+                    <pre><code># Create ACR (name must be globally unique, lowercase only)
+az acr create --resource-group unweave-rg \
+  --name unweaveregistry --sku Basic
+
+# Enable admin access (needed for ACI)
+az acr update --name unweaveregistry --admin-enabled true
+
+# Login to ACR
+az acr login --name unweaveregistry</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <h4>Build & Push Images</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+                    <pre><code># Tag and push backend
+docker build -t unweaveregistry.azurecr.io/unweave-backend:latest ./backend
+docker push unweaveregistry.azurecr.io/unweave-backend:latest
+
+# Tag and push frontend
+docker build -t unweaveregistry.azurecr.io/unweave-frontend:latest ./frontend
+docker push unweaveregistry.azurecr.io/unweave-frontend:latest</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">4</div>
+                <h4>Deploy Backend (GPU Container)</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+                    <pre><code># Get ACR credentials
+ACR_PASSWORD=$(az acr credential show --name unweaveregistry \
+  --query "passwords[0].value" -o tsv)
+
+# Deploy backend with GPU
+az container create \
+  --resource-group unweave-rg \
+  --name unweave-backend \
+  --image unweaveregistry.azurecr.io/unweave-backend:latest \
+  --registry-login-server unweaveregistry.azurecr.io \
+  --registry-username unweaveregistry \
+  --registry-password "$ACR_PASSWORD" \
+  --cpu 4 --memory 8 \
+  --gpu-count 1 --gpu-sku V100 \
+  --ports 8000 \
+  --ip-address Public \
+  --environment-variables \
+    CLOUD_MODE=true \
+    DEVICE_OVERRIDE=cuda \
+    MAX_FILE_SIZE_MB=100 \
+  --restart-policy Always</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">5</div>
+                <h4>Deploy Frontend</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+                    <pre><code># Get backend IP
+BACKEND_IP=$(az container show --resource-group unweave-rg \
+  --name unweave-backend --query "ipAddress.ip" -o tsv)
+
+echo "Backend running at: http://$BACKEND_IP:8000"
+
+# Deploy frontend container
+az container create \
+  --resource-group unweave-rg \
+  --name unweave-frontend \
+  --image unweaveregistry.azurecr.io/unweave-frontend:latest \
+  --registry-login-server unweaveregistry.azurecr.io \
+  --registry-username unweaveregistry \
+  --registry-password "$ACR_PASSWORD" \
+  --cpu 1 --memory 1 \
+  --ports 80 \
+  --ip-address Public \
+  --restart-policy Always</code></pre>
+                </div>
+                <div class="info-box tip">
+                    <strong>💡 Tip</strong>
+                    Update the nginx.conf <code>proxy_pass</code> to point to your backend's public IP before building
+                    the frontend image. Or use <strong>Azure Container Apps</strong> for internal service discovery.
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">6</div>
+                <h4>Verify Deployment</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+                    <pre><code># Get frontend IP
+FRONTEND_IP=$(az container show --resource-group unweave-rg \
+  --name unweave-frontend --query "ipAddress.ip" -o tsv)
+
+echo "🎵 Unweave is live at: http://$FRONTEND_IP"
+
+# Check backend health
+curl http://$BACKEND_IP:8000/health</code></pre>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <strong>📌 Cleanup</strong>
+                To stop and delete everything: <code>az group delete --name unweave-rg --yes --no-wait</code>
+            </div>
+        </div>
+
+        <!-- ───────────── GCP ───────────── -->
+        <div class="section" id="gcp">
+            <div class="section-header">
+                <span class="badge badge-gcp">GCP</span>
+                <h2>Deploy to Google Cloud Platform</h2>
+            </div>
+
+            <p>Uses <strong>Artifact Registry</strong> to store Docker images and <strong>Cloud Run</strong> (with GPU)
+                to serve both containers.</p>
+
+            <div class="step">
+                <div class="step-number">1</div>
+                <h4>Setup Project & APIs</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+                    <pre><code># Set your project
+export PROJECT_ID="your-gcp-project-id"
+gcloud config set project $PROJECT_ID
+
+# Enable required APIs
+gcloud services enable \
+  artifactregistry.googleapis.com \
+  run.googleapis.com \
+  cloudbuild.googleapis.com
+
+# Create Artifact Registry repo
+gcloud artifacts repositories create unweave \
+  --repository-format=docker \
+  --location=us-central1 \
+  --description="Unweave container images"
+
+# Configure Docker auth
+gcloud auth configure-docker us-central1-docker.pkg.dev</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <h4>Build & Push Images</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+                    <pre><code>REGISTRY="us-central1-docker.pkg.dev/$PROJECT_ID/unweave"
+
+# Build and push backend
+docker build -t $REGISTRY/backend:latest ./backend
+docker push $REGISTRY/backend:latest
+
+# Build and push frontend
+docker build -t $REGISTRY/frontend:latest ./frontend
+docker push $REGISTRY/frontend:latest</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <h4>Deploy Backend to Cloud Run (GPU)</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+                    <pre><code># Deploy backend with NVIDIA L4 GPU
+gcloud run deploy unweave-backend \
+  --image $REGISTRY/backend:latest \
+  --region us-central1 \
+  --platform managed \
+  --gpu 1 \
+  --gpu-type nvidia-l4 \
+  --cpu 4 --memory 8Gi \
+  --timeout 600 \
+  --concurrency 1 \
+  --min-instances 0 \
+  --max-instances 3 \
+  --set-env-vars "CLOUD_MODE=true,DEVICE_OVERRIDE=cuda,MAX_FILE_SIZE_MB=100" \
+  --allow-unauthenticated \
+  --port 8000
+
+# Get the backend URL
+BACKEND_URL=$(gcloud run services describe unweave-backend \
+  --region us-central1 --format="value(status.url)")
+echo "Backend: $BACKEND_URL"</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">4</div>
+                <h4>Deploy Frontend to Cloud Run</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+                    <pre><code># Deploy frontend
+gcloud run deploy unweave-frontend \
+  --image $REGISTRY/frontend:latest \
+  --region us-central1 \
+  --platform managed \
+  --cpu 1 --memory 512Mi \
+  --min-instances 0 \
+  --max-instances 5 \
+  --allow-unauthenticated \
+  --port 80
+
+# Get the frontend URL
+FRONTEND_URL=$(gcloud run services describe unweave-frontend \
+  --region us-central1 --format="value(status.url)")
+echo "🎵 Unweave live at: $FRONTEND_URL"</code></pre>
+                </div>
+                <div class="info-box tip">
+                    <strong>💡 Tip</strong>
+                    For the Nginx reverse proxy to reach the backend, update <code>nginx.conf</code> to use the Cloud
+                    Run backend URL, or deploy both services in a VPC with internal routing.
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">5</div>
+                <h4>Verify & Test</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+                    <pre><code># Health check
+curl $BACKEND_URL/health
+
+# Open in browser
+echo "Open: $FRONTEND_URL"</code></pre>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <strong>📌 Cleanup</strong>
+                <code>gcloud run services delete unweave-backend --region us-central1 --quiet</code><br>
+                <code>gcloud run services delete unweave-frontend --region us-central1 --quiet</code>
+            </div>
+        </div>
+
+        <!-- ───────────── GitHub Actions ───────────── -->
+        <div class="section" id="github-actions">
+            <div class="section-header">
+                <span class="badge badge-github">CI/CD</span>
+                <h2>GitHub Actions — Auto Deploy on Push</h2>
+            </div>
+
+            <p>Set up GitHub Actions so every push to <code>main</code> automatically builds and deploys without
+                rebuilding containers locally.</p>
+
+            <h3>Azure GitHub Actions Workflow</h3>
+            <p>Create <code>.github/workflows/deploy-azure.yml</code>:</p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span>yaml — .github/workflows/deploy-azure.yml</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code>name: Deploy to Azure
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  ACR_NAME: unweaveregistry
+  RESOURCE_GROUP: unweave-rg
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        run: az acr login --name $ACR_NAME
+
+      - name: Build & Push Backend
+        run: |
+          docker build -t $ACR_NAME.azurecr.io/unweave-backend:${{ github.sha }} ./backend
+          docker build -t $ACR_NAME.azurecr.io/unweave-backend:latest ./backend
+          docker push $ACR_NAME.azurecr.io/unweave-backend:${{ github.sha }}
+          docker push $ACR_NAME.azurecr.io/unweave-backend:latest
+
+      - name: Build & Push Frontend
+        run: |
+          docker build -t $ACR_NAME.azurecr.io/unweave-frontend:${{ github.sha }} ./frontend
+          docker build -t $ACR_NAME.azurecr.io/unweave-frontend:latest ./frontend
+          docker push $ACR_NAME.azurecr.io/unweave-frontend:${{ github.sha }}
+          docker push $ACR_NAME.azurecr.io/unweave-frontend:latest
+
+      - name: Restart Containers
+        run: |
+          az container restart --resource-group $RESOURCE_GROUP --name unweave-backend
+          az container restart --resource-group $RESOURCE_GROUP --name unweave-frontend</code></pre>
+            </div>
+
+            <h4>Required GitHub Secrets for Azure</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Secret Name</th>
+                        <th>How to Generate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>AZURE_CREDENTIALS</code></td>
+                        <td><code>az ad sp create-for-rbac --name "unweave-gh" --role contributor --scopes /subscriptions/{sub-id} --sdk-auth</code>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>GCP GitHub Actions Workflow</h3>
+            <p>Create <code>.github/workflows/deploy-gcp.yml</code>:</p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span>yaml — .github/workflows/deploy-gcp.yml</span>
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code>name: Deploy to GCP
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  PROJECT_ID: your-gcp-project-id
+  REGION: us-central1
+  REGISTRY: us-central1-docker.pkg.dev
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for GCP
+        run: gcloud auth configure-docker $REGISTRY --quiet
+
+      - name: Build & Push Backend
+        run: |
+          docker build -t $REGISTRY/$PROJECT_ID/unweave/backend:${{ github.sha }} ./backend
+          docker build -t $REGISTRY/$PROJECT_ID/unweave/backend:latest ./backend
+          docker push $REGISTRY/$PROJECT_ID/unweave/backend:${{ github.sha }}
+          docker push $REGISTRY/$PROJECT_ID/unweave/backend:latest
+
+      - name: Build & Push Frontend
+        run: |
+          docker build -t $REGISTRY/$PROJECT_ID/unweave/frontend:${{ github.sha }} ./frontend
+          docker build -t $REGISTRY/$PROJECT_ID/unweave/frontend:latest ./frontend
+          docker push $REGISTRY/$PROJECT_ID/unweave/frontend:${{ github.sha }}
+          docker push $REGISTRY/$PROJECT_ID/unweave/frontend:latest
+
+      - name: Deploy Backend to Cloud Run
+        run: |
+          gcloud run deploy unweave-backend \
+            --image $REGISTRY/$PROJECT_ID/unweave/backend:${{ github.sha }} \
+            --region $REGION \
+            --platform managed
+
+      - name: Deploy Frontend to Cloud Run
+        run: |
+          gcloud run deploy unweave-frontend \
+            --image $REGISTRY/$PROJECT_ID/unweave/frontend:${{ github.sha }} \
+            --region $REGION \
+            --platform managed</code></pre>
+            </div>
+
+            <h4>Required GitHub Secrets for GCP</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Secret Name</th>
+                        <th>How to Generate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>GCP_SA_KEY</code></td>
+                        <td>Create a Service Account → Grant "Artifact Registry Writer" + "Cloud Run Admin" roles →
+                            Download JSON key</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ───────────── Cost Estimates ───────────── -->
+        <div class="section" id="costs">
+            <div class="section-header">
+                <span class="badge badge-prereq">Costs</span>
+                <h2>Estimated Monthly Costs</h2>
+            </div>
+
+            <p>Costs depend on usage patterns. These estimates assume moderate usage (50 separations/day, 8 hours
+                active).</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Azure (ACI)</th>
+                        <th>GCP (Cloud Run)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Backend GPU (T4/V100)</td>
+                        <td>$200–$600/mo</td>
+                        <td>$150–$400/mo *</td>
+                    </tr>
+                    <tr>
+                        <td>Frontend (nginx)</td>
+                        <td>$10–$20/mo</td>
+                        <td>$5–$15/mo *</td>
+                    </tr>
+                    <tr>
+                        <td>Container Registry</td>
+                        <td>$5/mo</td>
+                        <td>$5/mo</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total</strong></td>
+                        <td><strong>$215–$625/mo</strong></td>
+                        <td><strong>$160–$420/mo</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>* GCP Cloud Run charges per-request + per-second of compute, so costs scale down to near $0 with no
+                traffic (min instances = 0).</p>
+
+            <div class="info-box tip">
+                <strong>💡 Cost Optimization Tips</strong>
+                <ul style="margin-top: 8px;">
+                    <li>Use <strong>min-instances=0</strong> on GCP to pay only when processing</li>
+                    <li>Use <strong>T4 GPUs</strong> instead of V100 (50–70% cheaper, fast enough for Demucs)</li>
+                    <li>Set aggressive <strong>CLEANUP_INTERVAL_SECONDS</strong> to free disk space</li>
+                    <li>Use <strong>spot/preemptible instances</strong> for up to 90% savings (with restart risk)</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- ───────────── Environment Variables Reference ───────────── -->
+        <div class="section" id="envvars">
+            <div class="section-header">
+                <span class="badge badge-prereq">Reference</span>
+                <h2>Environment Variables</h2>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Variable</th>
+                        <th>Default</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>DEVICE_OVERRIDE</code></td>
+                        <td><em>auto</em></td>
+                        <td>Force GPU device: <code>cuda</code>, <code>mps</code>, <code>directml</code>,
+                            <code>cpu</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>CLOUD_MODE</code></td>
+                        <td><code>false</code></td>
+                        <td>Enable cloud optimizations (aggressive cleanup, memory limits)</td>
+                    </tr>
+                    <tr>
+                        <td><code>MAX_FILE_SIZE_MB</code></td>
+                        <td><code>50</code></td>
+                        <td>Maximum upload file size in MB</td>
+                    </tr>
+                    <tr>
+                        <td><code>CLEANUP_INTERVAL_SECONDS</code></td>
+                        <td><code>3600</code></td>
+                        <td>How often to clean up old stems</td>
+                    </tr>
+                    <tr>
+                        <td><code>WORKERS</code></td>
+                        <td><code>1</code></td>
+                        <td>Number of uvicorn workers (keep at 1 for GPU)</td>
+                    </tr>
+                    <tr>
+                        <td><code>HOST</code></td>
+                        <td><code>0.0.0.0</code></td>
+                        <td>Backend bind address</td>
+                    </tr>
+                    <tr>
+                        <td><code>PORT</code></td>
+                        <td><code>8000</code></td>
+                        <td>Backend port</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <div class="footer">
+        <p>Unweave Cloud Deployment Guide · <a href="https://github.com/Shlok-gupta08/unweave">GitHub</a> · MIT License
+        </p>
+    </div>
+
+    <script>
+        function copyCode(btn) {
+            const pre = btn.closest('.code-block').querySelector('pre code');
+            const text = pre.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = 'Copy';
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+    </script>
+
+</body>
+
+</html>

@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
-import { Volume2, VolumeX, Loader2, Download, Play, Pause } from 'lucide-react';
+import { Volume2, VolumeX, Loader2, Download, Play, Pause, Trash2 } from 'lucide-react';
 
 interface TrackProps {
     name: string;
@@ -8,21 +8,22 @@ interface TrackProps {
     onReady: (name: string, wavesurfer: WaveSurfer) => void;
     color: string;
     isMuted: boolean;
+    isGlobalPlaying: boolean;
     onMuteToggle: () => void;
-    onIndividualPlay: (name: string) => void;
     onSeek: (name: string, time: number) => void;
+    onSoloPlay: (name: string) => void;
+    onRemove?: () => void;
 }
 
 const Track: React.FC<TrackProps> = ({
     name, url, onReady, color,
-    isMuted, onMuteToggle,
-    onIndividualPlay, onSeek,
+    isMuted, isGlobalPlaying, onMuteToggle,
+    onSeek, onSoloPlay, onRemove
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const wsRef = useRef<WaveSurfer | null>(null);
     const [volume, setVolume] = useState(1);
     const [loading, setLoading] = useState(true);
-    const [isPlayingAlone, setIsPlayingAlone] = useState(false);
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -32,7 +33,7 @@ const Track: React.FC<TrackProps> = ({
             waveColor: `${color}50`,
             progressColor: color,
             cursorColor: '#facc15',
-            cursorWidth: 3,
+            cursorWidth: 2,
             barWidth: 2,
             barGap: 1,
             barRadius: 2,
@@ -47,14 +48,15 @@ const Track: React.FC<TrackProps> = ({
             onReady(name, wavesurfer);
         });
 
-        wavesurfer.on('play', () => setIsPlayingAlone(true));
-        wavesurfer.on('pause', () => setIsPlayingAlone(false));
-        wavesurfer.on('finish', () => setIsPlayingAlone(false));
+        // Sync seeking — WaveSurfer v7 emits 'interaction' with time in SECONDS.
+        // WaveSurfer also internally seeks this track before firing this event.
+        wavesurfer.on('interaction', (timeInSeconds: number) => {
+            onSeek(name, timeInSeconds);
+        });
 
-        // Sync seeking — when user clicks on the waveform, notify parent
-        wavesurfer.on('interaction', () => {
-            const currentTime = wavesurfer.getCurrentTime();
-            onSeek(name, currentTime);
+        wavesurfer.on('error', (err) => {
+            console.error('WaveSurfer error on track', name, err);
+            setLoading(false);
         });
 
         wsRef.current = wavesurfer;
@@ -66,31 +68,19 @@ const Track: React.FC<TrackProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [url]);
 
-    // Volume / mute sync + auto-mute at 0
+    // Volume / mute sync — near-zero volume keeps the Web Audio pipeline alive so it doesn't desync.
     useEffect(() => {
         if (wsRef.current) {
-            wsRef.current.setVolume(isMuted ? 0 : volume);
+            wsRef.current.setVolume(isMuted ? 0.000001 : volume);
         }
     }, [volume, isMuted]);
 
     const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = parseFloat(e.target.value);
         setVolume(val);
-        // Auto-mute when slider hits 0
         if (val === 0 && !isMuted) onMuteToggle();
-        // Auto-unmute when sliding back up
         if (val > 0 && isMuted) onMuteToggle();
     };
-
-    const handleIndividualPlay = useCallback(() => {
-        if (!wsRef.current || loading) return;
-        onIndividualPlay(name);
-        if (wsRef.current.isPlaying()) {
-            wsRef.current.pause();
-        } else {
-            wsRef.current.play();
-        }
-    }, [loading, name, onIndividualPlay]);
 
     const handleDownload = async () => {
         try {
@@ -108,56 +98,69 @@ const Track: React.FC<TrackProps> = ({
         }
     };
 
+    // Determine if this specific track is audible (playing + not muted)
+    const isTrackAudible = isGlobalPlaying && !isMuted;
+
     return (
-        <div className={`relative flex items-center gap-4 p-4 rounded-2xl border backdrop-blur-md transition-all duration-500
+        <div className={`relative flex items-center gap-2 sm:gap-4 p-3 sm:p-4 rounded-2xl border backdrop-blur-md transition-all duration-500
             ${isMuted
-                ? 'border-white/[0.03] bg-black/20 opacity-35'
+                ? 'border-white/[0.03] bg-black/20 opacity-35 hover:opacity-100'
                 : 'border-white/10 bg-white/[0.02] hover:bg-white/[0.03]'
             }`}
         >
             {/* Track label + controls column */}
-            <div className="w-28 shrink-0 flex flex-col gap-2.5">
-                <div className="flex items-center gap-2">
+            <div className="w-20 sm:w-28 shrink-0 flex flex-col gap-2">
+                <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}80` }} />
-                    <span className="font-bold text-sm tracking-tight text-white truncate">{name}</span>
+                    <span className="font-bold text-xs sm:text-sm tracking-tight text-white truncate" title={name}>{name}</span>
                 </div>
 
                 {/* Button row */}
-                <div className="flex items-center gap-1.5">
-                    {/* Individual play */}
+                <div className="flex items-center gap-1">
+                    {/* Solo Play — mutes all other tracks and plays this one */}
                     <button
-                        onClick={handleIndividualPlay}
+                        onClick={() => onSoloPlay(name)}
                         disabled={loading}
-                        className={`p-1.5 rounded-lg transition-all duration-300
-                            ${loading ? 'text-zinc-700 cursor-not-allowed'
-                                : isPlayingAlone ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                                    : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 border border-white/5'
-                            }`}
-                        title={isPlayingAlone ? 'Pause' : 'Play'}
+                        className={`p-1 sm:p-1.5 rounded-lg transition-all duration-300 ${isTrackAudible
+                            ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30'
+                            : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 border border-white/5'
+                            } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        title={isTrackAudible ? `Pause` : `Solo ${name}`}
                     >
-                        {isPlayingAlone ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                        {isTrackAudible ? <Pause size={13} /> : <Play size={13} className="ml-0.5" />}
                     </button>
 
                     {/* Mute */}
                     <button
                         onClick={onMuteToggle}
-                        className={`p-1.5 rounded-lg transition-all duration-300
-                            ${isMuted ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        className={`p-1 sm:p-1.5 rounded-lg transition-all duration-300
+                            ${isMuted ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
                                 : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 border border-white/5'
                             }`}
-                        title="Mute"
+                        title={isMuted ? "Unmute" : "Mute"}
                     >
-                        {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                        {isMuted ? <VolumeX size={13} /> : <Volume2 size={13} />}
                     </button>
 
                     {/* Download */}
                     <button
                         onClick={handleDownload}
-                        className="p-1.5 rounded-lg bg-white/5 text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 transition-all duration-300"
+                        className="p-1 sm:p-1.5 rounded-lg bg-white/5 text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 transition-all duration-300"
                         title={`Download ${name}`}
                     >
-                        <Download size={14} />
+                        <Download size={13} />
                     </button>
+
+                    {/* Delete (only for merged tracks) */}
+                    {onRemove && (
+                        <button
+                            onClick={onRemove}
+                            className="p-1 sm:p-1.5 rounded-lg bg-white/5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 border border-white/5 hover:border-red-500/30 transition-all duration-300"
+                            title={`Delete ${name}`}
+                        >
+                            <Trash2 size={13} />
+                        </button>
+                    )}
                 </div>
 
                 {/* Volume slider */}

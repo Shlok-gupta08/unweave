@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Github } from 'lucide-react';
+import { Github, X } from 'lucide-react';
 import axios from 'axios';
 import { Uploader } from './components/Uploader';
 import { Mixer } from './components/Mixer';
+import { getBlobFromDB, saveBlobToDB, deleteBlobFromDB } from './utils/db';
 import type { SeparationJob } from './types';
 
 const STORAGE_KEY = 'unweave_session';
@@ -46,6 +47,7 @@ function App() {
   const [job, setJob] = useState<SeparationJob | null>(null);
   const [resumeJobId, setResumeJobId] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
+  const [isUploadingNew, setIsUploadingNew] = useState(false);
 
   // Restore session on mount — checks both localStorage AND the server
   useEffect(() => {
@@ -54,6 +56,53 @@ function App() {
       const session = loadSession();
       if (session) {
         if (session.job && !session.activeJobId) {
+          // Pre-flight check: verify the server hasn't deleted these files (e.g., 404 on first stem)
+          const stemEntries = Object.entries(session.job.stems);
+          const firstOriginalStem = stemEntries.find(([name]) => !name.startsWith('Merged'));
+          if (firstOriginalStem) {
+            try {
+              await axios.head(firstOriginalStem[1]);
+            } catch (err: any) {
+              if (err.response?.status === 404) {
+                console.warn('Server stems expired (404). Clearing stale session.');
+                clearSession();
+                setIsRestoring(false);
+                return;
+              }
+            }
+          }
+
+          // Hydrate dynamic dead blob urls
+          const hydratedStems = { ...session.job.stems };
+          let changed = false;
+
+          for (const [name, _] of Object.entries(hydratedStems)) {
+            if (name.startsWith('Merged')) {
+              try {
+                const blob = await getBlobFromDB(name);
+                if (blob && blob.size > 0) {
+                  // Ensure explicit MIME type for reliable decoding
+                  const safeBlob = new Blob([blob], { type: 'audio/mpeg' });
+                  hydratedStems[name as keyof typeof hydratedStems] = URL.createObjectURL(safeBlob);
+                  changed = true;
+                } else {
+                  console.warn('Blob not found or empty for', name);
+                  delete hydratedStems[name as keyof typeof hydratedStems];
+                  changed = true;
+                }
+              } catch (e) {
+                console.warn('Could not hydrate blob from DB for', name);
+                delete hydratedStems[name as keyof typeof hydratedStems];
+                changed = true;
+              }
+            }
+          }
+
+          if (changed) {
+            session.job.stems = hydratedStems;
+            saveSession(session.job, null);
+          }
+
           setJob(session.job);
           setIsRestoring(false);
           return;
@@ -119,10 +168,54 @@ function App() {
     saveSession(data, null);
   }, []);
 
-  const handleReset = useCallback(() => {
+
+  const handleAddStem = useCallback((name: string, url: string, blob?: Blob) => {
+    setJob((prev: SeparationJob | null) => {
+      if (!prev) return prev;
+
+      if (blob) {
+        saveBlobToDB(name, blob).catch(console.error);
+      }
+
+      const nextJob = {
+        ...prev,
+        stems: {
+          ...prev.stems,
+          [name]: url
+        }
+      };
+
+      saveSession(nextJob, null);
+      return nextJob;
+    });
+  }, []);
+
+  const handleSessionExpired = useCallback(() => {
+    setResumeJobId(null);
+    clearSession();
+  }, []);
+
+  const handleClearJob = useCallback(() => {
     setJob(null);
     setResumeJobId(null);
     clearSession();
+  }, []);
+
+  const handleRemoveStem = useCallback((name: string) => {
+    setJob((prev: SeparationJob | null) => {
+      if (!prev) return prev;
+      const nextStems = { ...prev.stems };
+      delete nextStems[name as keyof typeof nextStems];
+
+      // Clean up IndexedDB
+      if (name.startsWith('Merged')) {
+        deleteBlobFromDB(name).catch(console.error);
+      }
+
+      const nextJob = { ...prev, stems: nextStems };
+      saveSession(nextJob, null);
+      return nextJob;
+    });
   }, []);
 
   if (isRestoring) return null;
@@ -130,7 +223,7 @@ function App() {
   return (
     <div className="min-h-screen bg-black text-slate-50 font-sans selection:bg-yellow-500/30 pb-20 overflow-x-hidden">
       <header className="fixed w-full bg-black/50 border-b border-white/5 top-0 z-50 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <div className="flex items-center gap-1 group cursor-default">
             <div className="relative h-10 flex items-center justify-center overflow-hidden rounded-xl drop-shadow-[0_0_15px_rgba(250,204,21,0.2)] transition-all duration-500 group-hover:scale-110 group-hover:drop-shadow-[0_0_25px_rgba(255,215,0,0.5)]">
               <img src="/logo_NavBar.png" alt="Unweave Logo" className="h-full w-auto object-contain opacity-75 brightness-75 drop-shadow-md rounded-xl" />
@@ -153,66 +246,69 @@ function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 pt-32 relative z-10 flex flex-col items-center">
-        {/* Ambient Glows */}
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-yellow-500/5 blur-[150px] rounded-full pointer-events-none -z-10" />
-        <div className="absolute top-40 left-1/2 -translate-x-[60%] w-[600px] h-[400px] bg-purple-500/5 blur-[120px] rounded-full pointer-events-none -z-10" />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32 relative z-10 flex flex-col items-center">
+        {/* Soft Golden Spotlight */}
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-yellow-500/10 blur-[160px] rounded-full pointer-events-none -z-10 opacity-75" />
 
-        <div className="text-center w-full max-w-4xl mx-auto mb-24 relative pt-40">
+        <div className="text-center w-full max-w-4xl mx-auto mb-16 sm:mb-24 relative pt-28 sm:pt-40">
 
           {/* Giant Transparent Background Logo */}
-          {!job && (
-            <div className="absolute -top-[220px] left-1/2 -translate-x-1/2 w-[700px] h-[700px] pointer-events-none -z-10 opacity-20 flex items-center justify-center animate-in fade-in duration-1000 ease-out fill-mode-both">
-              <img
-                src="/logo_transparent.png"
-                alt="Background Watermark"
-                className="w-full h-full object-contain filter drop-shadow-[0_0_100px_rgba(250,204,21,0.4)]"
-              />
-            </div>
-          )}
+          <div className="absolute -top-[120px] sm:-top-[220px] left-1/2 -translate-x-1/2 w-[360px] sm:w-[700px] h-[360px] sm:h-[700px] pointer-events-none -z-10 opacity-20 flex items-center justify-center animate-in fade-in duration-1000 ease-out fill-mode-both">
+            <img
+              src="/logo_transparent.png"
+              alt="Background Watermark"
+              className="w-full h-full object-contain filter drop-shadow-[0_0_100px_rgba(250,204,21,0.4)]"
+            />
+          </div>
 
-          <h2 className="text-6xl sm:text-8xl lg:text-9xl font-black tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-500 drop-shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:drop-shadow-[0_0_50px_rgba(255,255,255,0.6)] animate-pulse hover:animate-none transition-all duration-700 cursor-default">
+          <h2 className="text-5xl sm:text-8xl lg:text-9xl font-black tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-500 drop-shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:drop-shadow-[0_0_50px_rgba(255,255,255,0.6)] animate-pulse hover:animate-none transition-all duration-700 cursor-default">
             Unweave
           </h2>
-          <p className="text-2xl sm:text-3xl text-yellow-500 font-bold mb-6 tracking-tight drop-shadow-lg">
+          <p className="text-xl sm:text-2xl md:text-3xl text-yellow-500 font-bold mb-6 tracking-tight drop-shadow-lg px-4">
             Visualize the layers. Isolate the sound.
           </p>
-          <p className="text-lg sm:text-xl text-zinc-400 font-medium leading-relaxed max-w-2xl mx-auto drop-shadow-md">
+          <p className="text-base sm:text-xl text-zinc-400 font-medium leading-relaxed max-w-2xl mx-auto drop-shadow-md px-4">
             Upload any audio track and instantly isolate <span className="text-zinc-100">Vocals, Drums, Bass, Guitar,</span> and <span className="text-zinc-100">Piano</span>. Studio-grade stem separation powered by AI.
           </p>
         </div>
 
         <div className="w-full max-w-5xl">
-          {!job ? (
-            <div className="relative w-full animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300 ease-out fill-mode-both">
-              <div className="absolute -inset-1 bg-gradient-to-r from-yellow-500/10 via-purple-500/10 to-transparent rounded-[2rem] blur-xl opacity-50" />
-              <Uploader
-                onComplete={handleComplete}
-                onJobStarted={handleJobStarted}
-                resumeJobId={resumeJobId}
-              />
-            </div>
-          ) : (
-            <div className="w-full animate-in fade-in slide-in-from-bottom-12 duration-700 ease-out">
-              <div className="flex items-center justify-between w-full mb-8 px-2 border-b border-white/10 pb-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-1.5 h-8 bg-gradient-to-b from-yellow-400 to-yellow-600 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.5)]" />
-                  <h3 className="text-3xl font-bold tracking-tight text-white">Studio Mix</h3>
-                  {job.processing_time && (
-                    <span className="text-sm text-zinc-500 font-medium ml-2">
-                      Processed in {job.processing_time}s
-                      {job.device_used && ` on ${job.device_used.toUpperCase()}`}
-                    </span>
-                  )}
-                </div>
+          {job && !isUploadingNew ? (
+            <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 fade-out-0">
+              <div className="mb-6 flex flex-col sm:flex-row justify-between items-center bg-white/5 p-4 rounded-xl border border-white/10 gap-4">
+                <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-yellow-600">Active Session</h2>
                 <button
-                  onClick={handleReset}
-                  className="px-5 py-2.5 text-sm font-bold rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-zinc-300 hover:text-white shadow-lg backdrop-blur-md"
+                  onClick={() => setIsUploadingNew(true)}
+                  className="w-full sm:w-auto px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors"
                 >
                   Upload New File
                 </button>
               </div>
-              <Mixer stems={job.stems} />
+              <div className="relative group">
+                <Mixer stems={job.stems} onAddStem={handleAddStem} onRemoveStem={handleRemoveStem} />
+              </div>
+            </div>
+          ) : (
+            <div className="relative w-full animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300 ease-out fill-mode-both">
+              {job && isUploadingNew && (
+                <button
+                  onClick={() => setIsUploadingNew(false)}
+                  className="absolute -top-12 left-1/2 -translate-x-1/2 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-full text-sm font-medium transition-colors flex items-center gap-2 z-50 text-zinc-300 hover:text-white"
+                >
+                  <X size={16} /> Cancel and Return to Session
+                </button>
+              )}
+              <Uploader
+                onComplete={(data) => {
+                  handleComplete(data);
+                  setIsUploadingNew(false);
+                }}
+                onJobStarted={handleJobStarted}
+                onSessionExpired={handleSessionExpired}
+                onClearJob={handleClearJob}
+                resumeJobId={resumeJobId}
+                hasActiveSession={!!job}
+              />
             </div>
           )}
         </div>

@@ -7,6 +7,7 @@ import uuid
 import time
 import threading
 import logging
+import subprocess
 
 from fastapi import FastAPI, File, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,7 +47,7 @@ try:
     CUDA_AVAILABLE = torch.cuda.is_available()
     if CUDA_AVAILABLE:
         _cuda_name = torch.cuda.get_device_name(0)
-        _cuda_vram = torch.cuda.get_device_properties(0).total_mem / 1024**3
+        _cuda_vram = torch.cuda.get_device_properties(0).total_memory / 1024**3
         log.info(f"🟢 NVIDIA GPU detected: {_cuda_name} ({_cuda_vram:.1f} GB VRAM)")
 except Exception:
     pass
@@ -74,7 +75,7 @@ except ImportError:
 if DEVICE_OVERRIDE == "cuda" and CUDA_AVAILABLE:
     DEVICE_TYPE = "cuda"
     DEVICE_NAME = torch.cuda.get_device_name(0)
-    GPU_VRAM_GB = torch.cuda.get_device_properties(0).total_mem / 1024**3
+    GPU_VRAM_GB = torch.cuda.get_device_properties(0).total_memory / 1024**3
 elif DEVICE_OVERRIDE == "mps" and MPS_AVAILABLE:
     DEVICE_TYPE = "mps"
     DEVICE_NAME = "Apple Silicon (MPS)"
@@ -92,7 +93,7 @@ if not DEVICE_OVERRIDE:
     if CUDA_AVAILABLE:
         DEVICE_TYPE = "cuda"
         DEVICE_NAME = torch.cuda.get_device_name(0)
-        GPU_VRAM_GB = torch.cuda.get_device_properties(0).total_mem / 1024**3
+        GPU_VRAM_GB = torch.cuda.get_device_properties(0).total_memory / 1024**3
     elif MPS_AVAILABLE:
         DEVICE_TYPE = "mps"
         DEVICE_NAME = "Apple Silicon (MPS)"
@@ -108,9 +109,28 @@ if GPU_VRAM_GB:
     log.info(f"   VRAM: {GPU_VRAM_GB:.1f} GB")
 
 # ============================================================
-# Audio Separator
+# FFmpeg PATH Fix (Windows)
 # ============================================================
-from audio_separator.separator import Separator
+# audio_separator requires ffmpeg on PATH. On Windows, WinGet installs
+# ffmpeg to a directory that may not be inherited by child processes.
+if sys.platform == "win32":
+    try:
+        import subprocess as _sp
+        _sp.check_output(["ffmpeg", "-version"], stderr=_sp.DEVNULL)
+    except FileNotFoundError:
+        _ffmpeg_search_dirs = [
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Links"),
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Packages"),
+            os.path.join(os.environ.get("ProgramFiles", ""), "ffmpeg", "bin"),
+            os.path.join(os.environ.get("ProgramFiles(x86)", ""), "ffmpeg", "bin"),
+        ]
+        for _dir in _ffmpeg_search_dirs:
+            if os.path.isdir(_dir) and any(f.lower().startswith("ffmpeg") for f in os.listdir(_dir)):
+                os.environ["PATH"] = _dir + os.pathsep + os.environ.get("PATH", "")
+                log.info(f"🔧 Added ffmpeg to PATH from: {_dir}")
+                break
+        else:
+            log.warning("⚠️  ffmpeg not found on PATH. Audio separation may fail.")
 
 # ============================================================
 # Configuration
@@ -152,12 +172,16 @@ app.mount("/stems", StaticFiles(directory=OUTPUT_DIR), name="stems")
 # Job Progress Tracking
 # ============================================================
 # Stores progress for active jobs:
-# { job_id: { "status": "uploading|processing|complete|error",
+# { job_id: { "status": "uploading|processing|complete|error|cancelled",
 #             "progress": 0-100, "eta_seconds": float,
 #             "message": str, "stems": dict, "started_at": float,
 #             "processing_time": float, "device_used": str } }
 jobs: dict = {}
 jobs_lock = threading.Lock()
+
+# Track active subprocesses so they can be securely terminated on cancel
+active_processes: dict = {}
+processes_lock = threading.Lock()
 
 
 def update_job(job_id: str, **kwargs):
@@ -172,87 +196,126 @@ def get_job(job_id: str) -> dict | None:
 
 
 # ============================================================
-# Tqdm Progress Capture
+# Parse Tqdm from Subprocess
 # ============================================================
-class TqdmCapture(io.StringIO):
-    """Captures tqdm output and extracts progress percentage + ETA."""
+def parse_tqdm_line(line: str, job_id: str):
+    """Extracts progress percentage + ETA from a tqdm stderr line and updates the job."""
+    progress_pattern = re.compile(r'(\d+)%\|')
+    eta_pattern = re.compile(r'<(\d+):(\d+)')
 
-    def __init__(self, job_id: str):
-        super().__init__()
-        self.job_id = job_id
-        self._progress_pattern = re.compile(r'(\d+)%\|')
-        self._eta_pattern = re.compile(r'<(\d+):(\d+)')
-        self._rate_pattern = re.compile(r'([\d.]+)s/it')
+    progress_match = progress_pattern.search(line)
+    if progress_match:
+        pct = int(progress_match.group(1))
+        eta_seconds = None
 
-    def write(self, s):
-        if not s or s.strip() == '':
-            return len(s) if s else 0
+        eta_match = eta_pattern.search(line)
+        if eta_match:
+            minutes = int(eta_match.group(1))
+            seconds = int(eta_match.group(2))
+            eta_seconds = minutes * 60 + seconds
 
-        # Try to parse tqdm progress
-        progress_match = self._progress_pattern.search(s)
-        if progress_match:
-            pct = int(progress_match.group(1))
-            eta_seconds = None
-
-            eta_match = self._eta_pattern.search(s)
-            if eta_match:
-                minutes = int(eta_match.group(1))
-                seconds = int(eta_match.group(2))
-                eta_seconds = minutes * 60 + seconds
-
-            update_job(
-                self.job_id,
-                progress=pct,
-                eta_seconds=eta_seconds,
-                message=f"Separating stems... {pct}%",
-            )
-
-        return len(s) if s else 0
-
-    def flush(self):
-        pass
+        update_job(
+            job_id,
+            progress=pct,
+            eta_seconds=eta_seconds,
+            message=f"Separating stems... {pct}%",
+        )
 
 
 # ============================================================
-# Separation Worker
+# Separation Worker (Subprocess Managed)
 # ============================================================
 def run_separation(job_id: str, input_path: str, job_out_dir: str, job_temp_dir: str):
-    """Runs separation in a background thread with progress tracking."""
+    """Spawns the worker.py script as a subprocess to perform separation."""
     try:
-        update_job(job_id, status="processing", progress=0, message="Loading AI model...")
-
+        update_job(job_id, status="processing", progress=0, message="Initializing worker...")
         start_time = time.time()
 
-        # Configure separator
-        separator_kwargs = {
-            "output_dir": job_out_dir,
-            "output_format": "mp3",
-            "model_file_dir": MODELS_DIR,
-        }
+        worker_script = os.path.join(BASE_DIR, "worker.py")
+        cmd = [
+            sys.executable,
+            worker_script,
+            "--job_id", job_id,
+            "--input", input_path,
+            "--out_dir", job_out_dir,
+            "--device_type", DEVICE_TYPE,
+            "--models_dir", MODELS_DIR
+        ]
 
-        if DEVICE_TYPE == "cuda":
-            separator_kwargs["use_cuda"] = True
-        elif DEVICE_TYPE == "directml":
-            separator_kwargs["use_directml"] = True
+        if sys.platform == "win32":
+            # creationflags=subprocess.CREATE_NO_WINDOW prevents opening a new console on Windows
+            creationflags = subprocess.CREATE_NO_WINDOW
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                creationflags=creationflags
+            )
         else:
-            separator_kwargs["use_cuda"] = False
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
 
-        separator = Separator(**separator_kwargs)
-        separator.load_model(model_filename="htdemucs_6s.yaml")
+        with processes_lock:
+            active_processes[job_id] = process
 
-        update_job(job_id, progress=5, message="Model loaded. Separating stems...")
+        # Read stderr line-by-line to extract tqdm progress
+        def read_stderr():
+            try:
+                for line in iter(process.stderr.readline, ''):
+                    if not line:
+                        break
+                    parse_tqdm_line(line, job_id)
+            except Exception:
+                pass
 
-        # Capture tqdm output to track progress
-        tqdm_capture = TqdmCapture(job_id)
-        old_stderr = sys.stderr
-        sys.stderr = tqdm_capture
+        stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+        stderr_thread.start()
 
-        try:
-            output_files = separator.separate(input_path)
-        finally:
-            sys.stderr = old_stderr
+        # Read stdout to get the final output or errors
+        stdout_output = []
+        for line in iter(process.stdout.readline, ''):
+            if line:
+                stdout_output.append(line.strip())
+        
+        process.wait()
+
+        # Cleanup process tracking
+        with processes_lock:
+            if job_id in active_processes:
+                del active_processes[job_id]
+
+        # Check if job was cancelled
+        job = get_job(job_id)
+        if job and job.get("status") == "cancelled":
+            cleanup_files(job_temp_dir)
+            cleanup_files(job_out_dir)
+            release_gpu_memory()
+            return
+
+        if process.returncode != 0:
+            error_msg = "Unknown error occurred"
+            for out in stdout_output:
+                if out.startswith("ERROR:"):
+                    error_msg = out.split("ERROR:", 1)[1]
+                    break
+            raise Exception(f"Worker exited with code {process.returncode}: {error_msg}")
 
         elapsed = time.time() - start_time
+        
+        # Parse standard output for DONE:file1.mp3,file2.mp3
+        output_files = []
+        for out in stdout_output:
+            if out.startswith("DONE:"):
+                files_str = out.split("DONE:", 1)[1]
+                if files_str:
+                    output_files = files_str.split(",")
+                break
+
         log.info(f"✅ Separation complete in {elapsed:.1f}s: {output_files}")
 
         # Release GPU memory
@@ -285,8 +348,8 @@ def run_separation(job_id: str, input_path: str, job_out_dir: str, job_temp_dir:
                     stem_lower = f.lower()
                     for keyword, label in stem_keywords.items():
                         if keyword in stem_lower:
-                            stems[label] = f"/stems/{job_id}/{f}"
-                            break
+                             stems[label] = f"/stems/{job_id}/{f}"
+                             break
                     else:
                         stems[f] = f"/stems/{job_id}/{f}"
 
@@ -310,12 +373,16 @@ def run_separation(job_id: str, input_path: str, job_out_dir: str, job_temp_dir:
         cleanup_files(job_temp_dir)
         cleanup_files(job_out_dir)
         release_gpu_memory()
-        update_job(
-            job_id,
-            status="error",
-            progress=0,
-            message=str(e),
-        )
+        
+        # Only set error if not already cancelled
+        job = get_job(job_id)
+        if job and job.get("status") != "cancelled":
+            update_job(
+                job_id,
+                status="error",
+                progress=0,
+                message=str(e),
+            )
 
 
 # ============================================================
@@ -466,4 +533,42 @@ async def list_jobs():
                 "message": j.get("message", ""),
             }
     return {"jobs": active}
+
+
+@app.post("/cancel/{job_id}")
+async def cancel_job(job_id: str):
+    """Instantly terminate a running separation job process by ID."""
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse({"error": "Job not found"}, status_code=404)
+        
+    if job.get("status") not in ("uploading", "processing"):
+        return JSONResponse({"error": "Job is not active"}, status_code=400)
+    
+    log.info(f"🛑 Cancelling job {job_id}")
+    
+    # Mark as cancelled immediately so the frontend knows
+    update_job(job_id, status="cancelled", message="Job cancelled by user")
+    
+    with processes_lock:
+        process = active_processes.get(job_id)
+        if process:
+            log.info(f"🔪 Terminating subprocess for {job_id}")
+            process.terminate()
+            # On windows process.kill() or taskkill might be needed for forceful abort,
+            # but terminate() usually suffices since it's just a PyTorch script.
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+            del active_processes[job_id]
+            
+    # Clean up files manually since the thread probably died immediately
+    job_temp_dir = os.path.join(TEMP_DIR, job_id)
+    job_out_dir = os.path.join(OUTPUT_DIR, job_id)
+    cleanup_files(job_temp_dir)
+    cleanup_files(job_out_dir)
+    release_gpu_memory()
+    
+    return {"message": "Job cancelled"}
 

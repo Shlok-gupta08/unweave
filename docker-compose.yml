@@ -11,7 +11,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      - backend_models:/app/models
+      - backend_stems:/app/static_stems
+      - backend_temp:/app/temp_audio
     environment:
       - HOST=0.0.0.0
       - PORT=8000
@@ -38,10 +40,19 @@ services:
       dockerfile: Dockerfile
     image: unweave-frontend
     ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      - VITE_API_URL=http://localhost:8000
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost/nginx-health" ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  backend_models:
+  backend_stems:
+  backend_temp:

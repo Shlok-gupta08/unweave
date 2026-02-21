@@ -28,8 +28,11 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # In cloud, frontend is typically served via CDN / static hosting
-  # Remove or override frontend service as needed
   frontend:
-    profiles:
-      - with-frontend
+    image: unweave-frontend
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"

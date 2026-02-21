@@ -16,7 +16,7 @@ export interface SeparationJob {
 }
 
 export interface JobStatus {
-    status: 'uploading' | 'processing' | 'complete' | 'error';
+    status: 'uploading' | 'processing' | 'complete' | 'error' | 'cancelled';
     progress: number;
     eta_seconds: number | null;
     message: string;
