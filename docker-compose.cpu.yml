@@ -1,0 +1,13 @@
+# ============================================================
+# Unweave — CPU-only Docker Compose Override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.cpu.yml up --build
+# ============================================================
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.cpu
+    image: unweave-backend:cpu
+    environment:
+      - DEVICE_OVERRIDE=cpu
+    deploy: {}

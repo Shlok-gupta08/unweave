@@ -1,0 +1,20 @@
+# ============================================================
+# Unweave — AMD ROCm Docker Compose Override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.rocm.yml up --build
+# Requires: AMD GPU + ROCm drivers installed on host (Linux only)
+# ============================================================
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.rocm
+    image: unweave-backend:rocm
+    environment:
+      - DEVICE_OVERRIDE=cuda
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - video
+      - render
+    deploy: {}

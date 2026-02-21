@@ -1,0 +1,35 @@
+# ============================================================
+# Unweave — Cloud-Optimized Docker Compose Override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.cloud.yml up --build
+# Designed for: Azure Container Instances, AWS ECS, GCP Cloud Run
+# ============================================================
+services:
+  backend:
+    image: unweave-backend:cuda
+    environment:
+      - CLOUD_MODE=true
+      - MAX_FILE_SIZE_MB=100
+      - CLEANUP_INTERVAL_SECONDS=1800
+      - WORKERS=1
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # In cloud, frontend is typically served via CDN / static hosting
+  # Remove or override frontend service as needed
+  frontend:
+    profiles:
+      - with-frontend

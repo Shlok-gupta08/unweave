@@ -1,0 +1,14 @@
+# Core
+fastapi
+uvicorn[standard]
+python-multipart
+aiofiles
+audio-separator[gpu]
+
+# Note: PyTorch is installed separately with the correct index URL
+# for your GPU type. See docs/GPU_SETUP.md for details.
+#
+# NVIDIA (CUDA):   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+# AMD (ROCm):      pip install torch torchaudio --index-url https://download.pytorch.org/whl/rocm6.0
+# Apple Silicon:   pip install torch torchaudio  (MPS support is built-in)
+# CPU only:        pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu

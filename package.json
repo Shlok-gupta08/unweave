@@ -1,0 +1,14 @@
+{
+    "name": "unweave",
+    "version": "1.0.0",
+    "description": "Unweave — AI-powered audio stem separation",
+    "scripts": {
+        "install:all": "npm install --prefix frontend",
+        "dev:frontend": "npm run dev --prefix frontend",
+        "dev:backend": "docker-compose up backend",
+        "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\""
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}

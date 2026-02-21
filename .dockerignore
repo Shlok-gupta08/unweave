@@ -1,0 +1,42 @@
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Generated backend data
+backend/models/
+backend/temp_audio/
+backend/static_stems/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs
+docs/
+*.md
+!README.md
+
+# Logs
+*.log
+backend_logs.txt
+
+# Audio test files
+*.mpeg
+*.mp3
+*.wav
+*.flac
