@@ -1,14 +1,16 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { UploadCloud, Loader2, Cpu, Zap, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UploadCloud, Cpu, Zap, Clock, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import type { SeparationJob, JobStatus } from '../types';
 
 interface UploaderProps {
     onComplete: (data: SeparationJob) => void;
+    onJobStarted?: (jobId: string) => void;
+    resumeJobId?: string | null;
 }
 
-export const Uploader: React.FC<UploaderProps> = ({ onComplete }) => {
+export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, resumeJobId }) => {
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [jobId, setJobId] = useState<string | null>(null);
@@ -25,6 +27,15 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete }) => {
         };
     }, []);
 
+    // Resume a job from localStorage on mount
+    useEffect(() => {
+        if (resumeJobId && !jobId) {
+            setIsUploading(true);
+            setJobId(resumeJobId);
+            setStatusMessage('Reconnecting to active job...');
+        }
+    }, [resumeJobId, jobId]);
+
     // Poll for job status
     useEffect(() => {
         if (!jobId) return;
@@ -40,7 +51,6 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete }) => {
                 if (data.device_used) setDeviceUsed(data.device_used);
 
                 if (data.status === 'complete' && data.stems) {
-                    // Stop polling
                     if (pollingRef.current) clearInterval(pollingRef.current);
                     pollingRef.current = null;
                     setIsUploading(false);
@@ -60,13 +70,20 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete }) => {
                     setJobId(null);
                     setError(data.message || 'Separation failed');
                 }
-            } catch {
-                // Polling error — don't stop, might be temporary
+            } catch (err) {
+                // If 404, the job no longer exists on the server (server restarted)
+                if (axios.isAxiosError(err) && err.response?.status === 404) {
+                    if (pollingRef.current) clearInterval(pollingRef.current);
+                    pollingRef.current = null;
+                    setIsUploading(false);
+                    setJobId(null);
+                    setError('Session expired — the server was restarted. Please upload again.');
+                }
+                // Other errors: keep polling (temporary network blip)
             }
         };
 
         pollingRef.current = setInterval(poll, 1000);
-        // Run once immediately
         poll();
 
         return () => {
@@ -92,9 +109,11 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete }) => {
             const response = await axios.post<{ job_id: string; message: string }>('/api/separate', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
-            // Got job ID — start polling
-            setJobId(response.data.job_id);
+            const newJobId = response.data.job_id;
+            setJobId(newJobId);
             setStatusMessage('Processing started...');
+            // Notify App so it can persist the job_id
+            onJobStarted?.(newJobId);
         } catch (err) {
             console.error(err);
             setIsUploading(false);
@@ -104,7 +123,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete }) => {
                 setError('Failed to upload audio.');
             }
         }
-    }, []);
+    }, [onJobStarted]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -152,17 +171,15 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete }) => {
 
                 {isUploading ? (
                     <div className="flex flex-col items-center gap-6 w-full max-w-md">
-                        {/* Animated spinner with progress ring */}
+                        {/* Progress ring */}
                         <div className="relative">
                             <svg className="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
-                                {/* Background circle */}
                                 <circle
                                     cx="50" cy="50" r="42"
                                     fill="none"
                                     stroke="rgba(255,255,255,0.05)"
                                     strokeWidth="6"
                                 />
-                                {/* Progress arc */}
                                 <circle
                                     cx="50" cy="50" r="42"
                                     fill="none"
@@ -192,14 +209,10 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete }) => {
                             <p className="text-xl font-bold text-white tracking-tight">
                                 {statusMessage || 'Separating Stems...'}
                             </p>
-
-                            {/* ETA */}
                             <div className="flex items-center justify-center gap-2 text-sm text-zinc-400">
                                 <Clock className="w-4 h-4" />
                                 <span>{formatETA(etaSeconds)}</span>
                             </div>
-
-                            {/* Device indicator */}
                             {deviceUsed && (
                                 <div className="flex items-center justify-center gap-1.5 text-xs text-zinc-500">
                                     {getDeviceIcon()}

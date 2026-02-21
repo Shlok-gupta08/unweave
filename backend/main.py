@@ -452,3 +452,18 @@ async def get_status(job_id: str):
     if not job:
         return JSONResponse({"error": "Job not found"}, status_code=404)
     return job
+
+
+@app.get("/jobs")
+async def list_jobs():
+    """List all active jobs. Used by frontend to reconnect after page reload."""
+    with jobs_lock:
+        active = {}
+        for jid, j in jobs.items():
+            active[jid] = {
+                "status": j.get("status"),
+                "progress": j.get("progress", 0),
+                "message": j.get("message", ""),
+            }
+    return {"jobs": active}
+
