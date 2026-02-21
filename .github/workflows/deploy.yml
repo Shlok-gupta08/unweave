@@ -30,6 +30,8 @@ jobs:
           containerAppName: unweave-backend
           resourceGroup: unweave-rg
           acrName: unweavergistry
+          acrUsername: ${{ secrets.ACR_USERNAME }}
+          acrPassword: ${{ secrets.ACR_PASSWORD }}
           environmentVariables: DEVICE_OVERRIDE=cpu
 
       - name: Build & Deploy Frontend
@@ -39,3 +41,5 @@ jobs:
           containerAppName: unweave-frontend
           resourceGroup: unweave-rg
           acrName: unweavergistry
+          acrUsername: ${{ secrets.ACR_USERNAME }}
+          acrPassword: ${{ secrets.ACR_PASSWORD }}
