@@ -45,4 +45,4 @@ jobs:
           acrUsername: ${{ secrets.ACR_USERNAME }}
           acrPassword: ${{ secrets.ACR_PASSWORD }}
           imageToBuild: unweavergistry.azurecr.io/unweave-frontend:${{ github.sha }}
-          environmentVariables: BACKEND_URL=https://unweave-backend.agreeabledune-38f80bfd.centralindia.azurecontainerapps.io
+          environmentVariables: BACKEND_URL=http://unweave-backend.agreeabledune-38f80bfd.centralindia.azurecontainerapps.io

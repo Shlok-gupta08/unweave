@@ -11,6 +11,7 @@ import subprocess
 
 from fastapi import FastAPI, File, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
@@ -149,15 +150,18 @@ app = FastAPI(
     version="1.0.0",
 )
 
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
-        "https://unweave-frontend.agreeabledune-38f80bfd.centralindia.azurecontainerapps.io"
+        "https://unweave-frontend.agreeabledune-38f80bfd.centralindia.azurecontainerapps.io",
+        "https://unweave.sg-projects.me"
     ],
-    allow_origin_regex=r"https://.*\.vercel\.app|https://.*\.azurecontainerapps\.io",
+    allow_origin_regex=r"https://.*\.vercel\.app|https://.*\.azurecontainerapps\.io|https://unweave\.sg-projects\.me",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
