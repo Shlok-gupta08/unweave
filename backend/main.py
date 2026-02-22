@@ -151,15 +151,29 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "https://unweave-frontend.agreeabledune-38f80bfd.centralindia.azurecontainerapps.io"
+    ],
+    allow_origin_regex=r"https://.*\.vercel\.app|https://.*\.azurecontainerapps\.io",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+import tempfile
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TEMP_DIR = os.path.join(BASE_DIR, "temp_audio")
-OUTPUT_DIR = os.path.join(BASE_DIR, "static_stems")
+
+if CLOUD_MODE:
+    TEMP_DIR = os.path.join(tempfile.gettempdir(), "unweave_temp")
+    OUTPUT_DIR = os.path.join(tempfile.gettempdir(), "unweave_stems")
+else:
+    TEMP_DIR = os.path.join(BASE_DIR, "temp_audio")
+    OUTPUT_DIR = os.path.join(BASE_DIR, "static_stems")
+
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 
 os.makedirs(TEMP_DIR, exist_ok=True)
@@ -480,7 +494,7 @@ async def health():
     return gpu_info
 
 
-@app.post("/separate")
+@app.post("/separate/")
 async def separate_audio(file: UploadFile = File(...)):
     """Upload audio and start async separation. Returns job_id for status polling."""
 

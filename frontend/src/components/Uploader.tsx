@@ -130,7 +130,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
         formData.append('file', selectedFile);
 
         try {
-            const response = await axios.post<{ job_id: string; message: string }>('/api/separate', formData, {
+            const response = await axios.post<{ job_id: string; message: string }>('/api/separate/', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
             const newJobId = response.data.job_id;
