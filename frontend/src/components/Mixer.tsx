@@ -469,148 +469,146 @@ export const Mixer: React.FC<MixerProps> = ({ stems, onAddStem, onRemoveStem }) 
     };
 
     return (
-        <div className="w-full mx-auto mt-4 flex flex-col gap-6">
+        <div className="w-full mx-auto mt-4 flex flex-col gap-4 sm:gap-6">
             {/* Master Controls & Markers Navbar */}
-            <div className="flex flex-col gap-4 p-4 sm:p-5 bg-white/[0.02] border border-white/5 rounded-3xl backdrop-blur-md shadow-2xl relative overflow-hidden group">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10 w-full">
-                    {/* Universal Controls (Squarish, Equal Size) */}
-                    <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 p-3 sm:p-5 bg-white/[0.02] border border-white/5 rounded-2xl sm:rounded-3xl backdrop-blur-md shadow-2xl relative overflow-hidden group">
+                {/* Row 1: Play controls + Undo/Redo */}
+                <div className="flex items-center justify-between gap-2 relative z-10 w-full">
+                    <div className="flex items-center gap-2 sm:gap-3">
                         <button
                             onClick={() => togglePlayAll()}
                             disabled={!isAllLoaded}
-                            className={`flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-xl transition-all duration-300 ${isAllLoaded
-                                ? 'bg-yellow-500 hover:bg-yellow-400 hover:scale-105 text-black shadow-[0_0_20px_rgba(250,204,21,0.4)]'
+                            className={`flex items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl transition-all duration-300 ${isAllLoaded
+                                ? 'bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-black shadow-[0_0_20px_rgba(250,204,21,0.4)]'
                                 : 'bg-white/5 text-zinc-600 cursor-not-allowed border border-white/10'
                                 }`}
                             title="Play/Pause Universal Pointer"
                         >
-                            {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" className="ml-0.5" />}
+                            {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
                         </button>
                         <button
                             onClick={stopAll}
                             disabled={!isAllLoaded}
-                            className={`flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-xl transition-all duration-300 ${isAllLoaded
-                                ? 'bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white text-zinc-300'
+                            className={`flex items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl transition-all duration-300 ${isAllLoaded
+                                ? 'bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95 hover:text-white text-zinc-300'
                                 : 'bg-white/5 text-zinc-700 cursor-not-allowed border border-white/5'
                                 }`}
                             title="Reset Position"
                         >
-                            <History size={20} />
+                            <History size={18} />
                         </button>
                         <button
                             onClick={unmuteAll}
                             disabled={!isAllLoaded}
-                            className={`flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-xl transition-all duration-300 ${isAllLoaded
-                                ? 'bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white text-zinc-300'
+                            className={`flex items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl transition-all duration-300 ${isAllLoaded
+                                ? 'bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95 hover:text-white text-zinc-300'
                                 : 'bg-white/5 text-zinc-700 cursor-not-allowed border border-white/5'
                                 }`}
                             title="Unmute All Layers"
                         >
-                            <Volume2 size={20} />
+                            <Volume2 size={18} />
                         </button>
-
-                        {isAllLoaded && (
-                            <div className="ml-2 flex items-center gap-2 border-l border-white/10 pl-5">
-                                <button
-                                    onClick={handleUndo}
-                                    disabled={historyIndex === 0}
-                                    className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 ${historyIndex > 0
-                                        ? 'bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white text-zinc-300'
-                                        : 'bg-transparent text-zinc-700 cursor-not-allowed border border-white/5'
-                                        }`}
-                                    title="Undo (Ctrl+Z)"
-                                >
-                                    <Undo2 size={18} />
-                                </button>
-                                <button
-                                    onClick={handleRedo}
-                                    disabled={historyIndex >= history.length - 1}
-                                    className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 ${historyIndex < history.length - 1
-                                        ? 'bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white text-zinc-300'
-                                        : 'bg-transparent text-zinc-700 cursor-not-allowed border border-white/5'
-                                        }`}
-                                    title="Redo (Ctrl+Y)"
-                                >
-                                    <Redo2 size={18} />
-                                </button>
-                            </div>
-                        )}
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-center gap-4 relative z-10 w-full sm:w-auto">
-                        {/* Markers Subnavbar */}
-                        {isAllLoaded && (
-                            <div className="flex flex-wrap items-center justify-center gap-2 bg-black/20 p-2 rounded-2xl border border-white/5">
-                                {currentState.markers.map((m, idx) => (
-                                    <button key={m.id} onClick={() => jumpToMarker(m.time)}
-                                        className="relative group px-2 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all hover:scale-105"
-                                        style={{ backgroundColor: `${m.color}15`, color: m.color, border: `1px solid ${m.color}40` }}
-                                        title={`Jump to ${m.label}`}>
-                                        <span className="whitespace-nowrap">{m.label}</span>
-                                        <div onClick={(e) => { e.stopPropagation(); removeMarker(idx); }}
-                                            className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-lg"
-                                            title="Remove Marker">
-                                            <X size={12} strokeWidth={3} />
-                                        </div>
-                                    </button>
-                                ))}
-                                {currentState.markers.length < 3 && (
-                                    <button onClick={addMarker}
-                                        className={`w-9 h-9 border-2 border-dashed border-white/30 rounded-xl flex items-center justify-center text-white/50 hover:bg-white/10 hover:border-white/50 hover:text-white transition-all ${currentState.markers.length > 0 ? 'ml-1' : ''}`}
-                                        title="Add Marker (saves current time)">
-                                        <Plus size={18} strokeWidth={2.5} />
-                                    </button>
-                                )}
-                                {markerWarning && (
-                                    <span className="text-red-400 text-xs font-semibold ml-1 animate-in fade-in slide-in-from-left-2 whitespace-nowrap">Max 3 markers</span>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Download all */}
-                        {isAllLoaded && (
-                            <div className="flex flex-wrap items-center justify-center gap-2">
-                                <div className="hidden sm:block h-10 w-px bg-white/10 mr-1" />
-                                <button
-                                    onClick={() => setIsMergeDialogOpen(true)}
-                                    className="flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-3 h-12 sm:h-14 rounded-xl bg-yellow-500/10 border border-yellow-500/30 hover:bg-yellow-500/20 hover:border-yellow-500/50 text-yellow-500 text-sm font-semibold transition-all duration-300 backdrop-blur-md"
-                                    title="Export combined layers as MP3"
-                                >
-                                    Merge to MP3
-                                </button>
-                                <button
-                                    onClick={handleDownloadAll}
-                                    disabled={isDownloading}
-                                    className={`flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-3 h-12 sm:h-14 rounded-xl border text-sm font-semibold transition-all duration-300 backdrop-blur-md
-                                        ${isSaved ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-500' : 'bg-white/5 border-white/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 hover:text-emerald-400 text-zinc-300'}`}
-                                    title="Download all stems as ZIP"
-                                >
-                                    {isDownloading
-                                        ? <><div className="w-4 h-4 rounded-full border-2 border-emerald-500/30 border-t-emerald-500 animate-spin" /> Zipping...</>
-                                        : isSaved
-                                            ? <><FolderDown size={18} /> Saved</>
-                                            : <><FolderDown size={18} /> Save All</>
-                                    }
-                                </button>
-                            </div>
-                        )}
-                        {!isAllLoaded && (
-                            <div className="text-sm text-zinc-400 font-medium flex items-center gap-3 bg-black/40 px-4 py-3 h-14 rounded-xl border border-white/5">
-                                <div className="w-4 h-4 rounded-full border-2 border-yellow-500/30 border-t-yellow-500 animate-spin" />
-                                Loading engine ({loadedCount}/{totalTracks})
-                            </div>
-                        )}
-                    </div>
+                    {isAllLoaded && (
+                        <div className="flex items-center gap-2 border-l border-white/10 pl-3 sm:pl-5">
+                            <button
+                                onClick={handleUndo}
+                                disabled={historyIndex === 0}
+                                className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl transition-all duration-300 ${historyIndex > 0
+                                    ? 'bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95 hover:text-white text-zinc-300'
+                                    : 'bg-transparent text-zinc-700 cursor-not-allowed border border-white/5'
+                                    }`}
+                                title="Undo (Ctrl+Z)"
+                            >
+                                <Undo2 size={16} />
+                            </button>
+                            <button
+                                onClick={handleRedo}
+                                disabled={historyIndex >= history.length - 1}
+                                className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl transition-all duration-300 ${historyIndex < history.length - 1
+                                    ? 'bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95 hover:text-white text-zinc-300'
+                                    : 'bg-transparent text-zinc-700 cursor-not-allowed border border-white/5'
+                                    }`}
+                                title="Redo (Ctrl+Y)"
+                            >
+                                <Redo2 size={16} />
+                            </button>
+                        </div>
+                    )}
                 </div>
+
+                {/* Row 2: Markers + Action Buttons */}
+                {isAllLoaded && (
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 relative z-10 w-full border-t border-white/5 pt-3">
+                        {/* Markers */}
+                        <div className="flex flex-wrap items-center gap-2 bg-black/20 p-2 rounded-xl sm:rounded-2xl border border-white/5 flex-1 min-w-0">
+                            {currentState.markers.map((m, idx) => (
+                                <button key={m.id} onClick={() => jumpToMarker(m.time)}
+                                    className="relative px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                                    style={{ backgroundColor: `${m.color}15`, color: m.color, border: `1px solid ${m.color}40` }}
+                                    title={`Jump to ${m.label}`}>
+                                    <span className="whitespace-nowrap">{m.label}</span>
+                                    <div onClick={(e) => { e.stopPropagation(); removeMarker(idx); }}
+                                        className="marker-delete-btn absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all active:scale-110 shadow-lg"
+                                        title="Remove Marker">
+                                        <X size={12} strokeWidth={3} />
+                                    </div>
+                                </button>
+                            ))}
+                            {currentState.markers.length < 3 && (
+                                <button onClick={addMarker}
+                                    className={`w-9 h-9 border-2 border-dashed border-white/30 rounded-xl flex items-center justify-center text-white/50 hover:bg-white/10 active:scale-95 hover:border-white/50 hover:text-white transition-all ${currentState.markers.length > 0 ? 'ml-1' : ''}`}
+                                    title="Add Marker (saves current time)">
+                                    <Plus size={18} strokeWidth={2.5} />
+                                </button>
+                            )}
+                            {markerWarning && (
+                                <span className="text-red-400 text-xs font-semibold ml-1 animate-in fade-in slide-in-from-left-2 whitespace-nowrap">Max 3 markers</span>
+                            )}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 shrink-0">
+                            <button
+                                onClick={() => setIsMergeDialogOpen(true)}
+                                className="flex items-center justify-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3 h-11 sm:h-14 rounded-xl bg-yellow-500/10 border border-yellow-500/30 hover:bg-yellow-500/20 active:scale-95 hover:border-yellow-500/50 text-yellow-500 text-xs sm:text-sm font-semibold transition-all duration-300 backdrop-blur-md flex-1 sm:flex-initial"
+                                title="Export combined layers as MP3"
+                            >
+                                Merge to MP3
+                            </button>
+                            <button
+                                onClick={handleDownloadAll}
+                                disabled={isDownloading}
+                                className={`flex items-center justify-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3 h-11 sm:h-14 rounded-xl border text-xs sm:text-sm font-semibold transition-all duration-300 backdrop-blur-md flex-1 sm:flex-initial
+                                    ${isSaved ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-500' : 'bg-white/5 border-white/10 hover:bg-emerald-500/10 active:scale-95 hover:border-emerald-500/30 hover:text-emerald-400 text-zinc-300'}`}
+                                title="Download all stems as ZIP"
+                            >
+                                {isDownloading
+                                    ? <><div className="w-4 h-4 rounded-full border-2 border-emerald-500/30 border-t-emerald-500 animate-spin" /> Zipping...</>
+                                    : isSaved
+                                        ? <><FolderDown size={16} /> Saved</>
+                                        : <><FolderDown size={16} /> Save All</>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {!isAllLoaded && (
+                    <div className="text-sm text-zinc-400 font-medium flex items-center gap-3 bg-black/40 px-4 py-3 h-11 sm:h-14 rounded-xl border border-white/5">
+                        <div className="w-4 h-4 rounded-full border-2 border-yellow-500/30 border-t-yellow-500 animate-spin" />
+                        Loading engine ({loadedCount}/{totalTracks})
+                    </div>
+                )}
             </div>
 
             {/* Tracks Container */}
-            <div className="flex flex-col gap-3 relative">
+            <div className="flex flex-col gap-2 sm:gap-3 relative">
                 {/* Visual Markers Line Above Tracks Overlay */}
                 {isAllLoaded && duration > 0 && currentState.markers.length > 0 && (
                     <div className="absolute top-0 bottom-0 left-0 right-0 pointer-events-none z-20 flex flex-col">
                         <div className="relative flex items-center gap-2 sm:gap-4 px-3 sm:px-4 h-full">
-                            <div className="w-20 sm:w-28 shrink-0" /> {/* Spacer for track label width */}
+                            <div className="hidden sm:block sm:w-28 shrink-0" /> {/* Spacer for track label width — hidden on mobile where tracks stack */}
                             <div className="flex-1 relative min-w-0 h-full">
                                 {currentState.markers.map(m => {
                                     const pct = Math.max(0, Math.min(100, (m.time / duration) * 100));

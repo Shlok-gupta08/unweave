@@ -42,3 +42,64 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #27272a #000;
 }
+
+/* ── Mobile & Touch Optimisations ── */
+
+/* Remove 300ms tap delay & tap highlight on iOS / Android */
+html {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Prevent horizontal overflow on mobile */
+#root {
+  overflow-x: hidden;
+}
+
+/* Make range sliders touch-friendly */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none; /* prevent scroll while dragging */
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #facc15;
+  margin-top: -6px;
+  box-shadow: 0 0 6px rgba(250, 204, 21, 0.4);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #facc15;
+  border: none;
+  box-shadow: 0 0 6px rgba(250, 204, 21, 0.4);
+}
+
+/* Touch-friendly marker delete (no hover on mobile) */
+@media (hover: none) and (pointer: coarse) {
+  .marker-delete-btn {
+    opacity: 1 !important;
+  }
+}

@@ -339,18 +339,18 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
 
     return (
         <>
-            <div className="w-full max-w-3xl mx-auto p-1 backdrop-blur-3xl rounded-[2.5rem] bg-white/[0.02] border border-white/5 shadow-2xl overflow-hidden relative group">
+            <div className="w-full max-w-3xl mx-auto p-1 backdrop-blur-3xl rounded-2xl sm:rounded-[2.5rem] bg-white/[0.02] border border-white/5 shadow-2xl overflow-hidden relative group">
                 <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 via-transparent to-yellow-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
                 <div
                     {...(isUploading || selectedFile ? {} : getRootProps())}
-                    className={`flex flex-col items-center justify-center p-8 sm:p-24 border border-dashed rounded-[2rem] transition-all duration-500 relative z-10 ${isDragActive ? 'border-yellow-500/50 bg-yellow-500/10 scale-[0.98]' : (selectedFile || isUploading ? 'border-white/5 bg-white/[0.02]' : 'border-white/10 hover:border-yellow-500/30 hover:bg-white/[0.03]')} ${isUploading || selectedFile ? 'opacity-100 cursor-default border-yellow-500/30' : 'cursor-pointer'}`}
+                    className={`flex flex-col items-center justify-center p-6 sm:p-24 border border-dashed rounded-xl sm:rounded-[2rem] transition-all duration-500 relative z-10 ${isDragActive ? 'border-yellow-500/50 bg-yellow-500/10 scale-[0.98]' : (selectedFile || isUploading ? 'border-white/5 bg-white/[0.02]' : 'border-white/10 hover:border-yellow-500/30 hover:bg-white/[0.03]')} ${isUploading || selectedFile ? 'opacity-100 cursor-default border-yellow-500/30' : 'cursor-pointer'}`}
                 >
                     {!isUploading && !selectedFile && <input {...getInputProps()} />}
 
                     {isUploading ? (
-                        <div className="flex flex-col items-center gap-6 w-full max-w-md">
+                        <div className="flex flex-col items-center gap-4 sm:gap-6 w-full max-w-md">
                             <div className="relative">
-                                <svg className="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
+                                <svg className="w-20 h-20 sm:w-24 sm:h-24 -rotate-90" viewBox="0 0 100 100">
                                     <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
                                     <circle cx="50" cy="50" r="42" fill="none" stroke="url(#progressGradient)" strokeWidth="6" strokeLinecap="round"
                                         strokeDasharray={`${2 * Math.PI * 42}`}
@@ -370,7 +370,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                             </div>
 
                             <div className="text-center space-y-2">
-                                <p className="text-xl font-bold text-white tracking-tight">{statusMessage || 'Separating Stems...'}</p>
+                                <p className="text-lg sm:text-xl font-bold text-white tracking-tight">{statusMessage || 'Separating Stems...'}</p>
                                 {passNumber > 1 && (
                                     <p className="text-xs text-yellow-500/70 font-medium">Pass 2 of 2 — Fine separation</p>
                                 )}
@@ -396,31 +396,31 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleCancel(); }}
                                 disabled={isCancelling}
-                                className="mt-4 px-6 py-2 text-sm font-semibold rounded-full border border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="mt-2 sm:mt-4 px-6 py-3 text-sm font-semibold rounded-full border border-red-500/50 text-red-400 hover:bg-red-500/10 active:scale-95 hover:text-red-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isCancelling ? 'Cancelling...' : 'Cancel Processing'}
                             </button>
                         </div>
                     ) : selectedFile ? (
-                        <div className="flex flex-col items-center gap-6 w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="p-6 rounded-3xl bg-yellow-500/10 border border-yellow-500/30 shadow-[0_0_30px_rgba(250,204,21,0.2)]">
-                                <UploadCloud className="w-12 h-12 text-yellow-500" />
+                        <div className="flex flex-col items-center gap-4 sm:gap-6 w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-yellow-500/10 border border-yellow-500/30 shadow-[0_0_30px_rgba(250,204,21,0.2)]">
+                                <UploadCloud className="w-10 h-10 sm:w-12 sm:h-12 text-yellow-500" />
                             </div>
                             <div className="text-center w-full">
-                                <p className="text-xl font-bold text-white mb-2 tracking-tight truncate px-4">{selectedFile.name}</p>
-                                <p className="text-sm text-zinc-400 mb-8 font-medium">
+                                <p className="text-lg sm:text-xl font-bold text-white mb-2 tracking-tight truncate px-2 sm:px-4">{selectedFile.name}</p>
+                                <p className="text-sm text-zinc-400 mb-6 sm:mb-8 font-medium">
                                     {(selectedFile.size / 1024 / 1024).toFixed(2)} MB • Ready to mix
                                 </p>
                                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                                     <button
                                         onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}
-                                        className="w-full sm:w-auto px-6 py-3 text-sm font-semibold rounded-xl border border-white/10 text-zinc-300 hover:bg-white/10 hover:text-white transition-all shadow-lg"
+                                        className="w-full sm:w-auto px-6 py-3 text-sm font-semibold rounded-xl border border-white/10 text-zinc-300 hover:bg-white/10 active:scale-95 hover:text-white transition-all shadow-lg"
                                     >
                                         Change File
                                     </button>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleProcessAudio(); }}
-                                        className="w-full sm:w-auto px-6 py-3 text-sm font-bold bg-yellow-500 text-black hover:bg-yellow-400 rounded-xl transition-all shadow-[0_0_20px_rgba(250,204,21,0.3)] hover:shadow-[0_0_30px_rgba(250,204,21,0.5)]"
+                                        className="w-full sm:w-auto px-6 py-3 text-sm font-bold bg-yellow-500 text-black hover:bg-yellow-400 active:scale-95 rounded-xl transition-all shadow-[0_0_20px_rgba(250,204,21,0.3)] hover:shadow-[0_0_30px_rgba(250,204,21,0.5)]"
                                     >
                                         Process Audio
                                     </button>
@@ -428,15 +428,15 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                             </div>
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center gap-6 animate-in fade-in duration-500">
-                            <div className={`p-6 rounded-3xl transition-all duration-500 ${isDragActive ? 'bg-yellow-500 shadow-[0_0_30px_rgba(250,204,21,0.4)]' : 'bg-white/5 border border-white/10 group-hover:border-yellow-500/50 group-hover:shadow-[0_0_20px_rgba(250,204,21,0.2)]'}`}>
-                                <UploadCloud className={`w-12 h-12 transition-colors duration-500 ${isDragActive ? 'text-black' : 'text-zinc-300 group-hover:text-yellow-400'}`} />
+                        <div className="flex flex-col items-center gap-4 sm:gap-6 animate-in fade-in duration-500">
+                            <div className={`p-4 sm:p-6 rounded-2xl sm:rounded-3xl transition-all duration-500 ${isDragActive ? 'bg-yellow-500 shadow-[0_0_30px_rgba(250,204,21,0.4)]' : 'bg-white/5 border border-white/10 group-hover:border-yellow-500/50 group-hover:shadow-[0_0_20px_rgba(250,204,21,0.2)]'}`}>
+                                <UploadCloud className={`w-10 h-10 sm:w-12 sm:h-12 transition-colors duration-500 ${isDragActive ? 'text-black' : 'text-zinc-300 group-hover:text-yellow-400'}`} />
                             </div>
-                            <div className="text-center">
-                                <p className="text-2xl font-bold text-white mb-3 tracking-tight">
+                            <div className="text-center px-2">
+                                <p className="text-xl sm:text-2xl font-bold text-white mb-3 tracking-tight">
                                     {isDragActive ? 'Drop audio here to replace' : 'Drop your audio file here'}
                                 </p>
-                                <p className="text-base text-zinc-400 font-medium">
+                                <p className="text-sm sm:text-base text-zinc-400 font-medium">
                                     or click to browse (MP3, MPEG, WAV, FLAC)
                                 </p>
                             </div>
@@ -444,13 +444,13 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                     )}
                 </div>
                 {error && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[90%] p-4 bg-red-950/80 border border-red-500/50 rounded-2xl text-red-200 text-sm font-medium text-center backdrop-blur-md shadow-2xl z-20 flex items-center justify-center gap-2">
+                    <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[92%] sm:w-[90%] p-3 sm:p-4 bg-red-950/80 border border-red-500/50 rounded-xl sm:rounded-2xl text-red-200 text-xs sm:text-sm font-medium text-center backdrop-blur-md shadow-2xl z-20 flex items-center justify-center gap-2">
                         <AlertCircle className="w-4 h-4 shrink-0" />
-                        {error}
+                        <span className="break-words">{error}</span>
                     </div>
                 )}
                 {cancelSuggestion && !error && !isUploading && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[90%] p-4 bg-zinc-900/90 border border-yellow-500/20 rounded-2xl text-zinc-300 text-sm font-medium text-center backdrop-blur-md shadow-2xl z-20 flex items-center justify-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[92%] sm:w-[90%] p-3 sm:p-4 bg-zinc-900/90 border border-yellow-500/20 rounded-xl sm:rounded-2xl text-zinc-300 text-xs sm:text-sm font-medium text-center backdrop-blur-md shadow-2xl z-20 flex items-center justify-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
                         <Cpu className="w-4 h-4 shrink-0 text-yellow-500" />
                         <span>{cancelSuggestion}</span>
                         <button
@@ -465,8 +465,8 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
 
             {/* Custom Confirm Dialog */}
             {showConfirmDialog && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="w-full max-w-md mx-4 p-6 rounded-3xl bg-zinc-900/95 border border-white/10 shadow-2xl animate-in zoom-in-95 duration-300">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full max-w-md mx-4 p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-zinc-900/95 border border-white/10 shadow-2xl animate-in zoom-in-95 duration-300">
                         <div className="flex items-start gap-4 mb-5">
                             <div className="p-3 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 shrink-0">
                                 <AlertTriangle className="w-6 h-6 text-yellow-500" />

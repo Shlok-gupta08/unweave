@@ -258,24 +258,24 @@ function AppContent() {
       {/* GPU Offline Warning Banner */}
       {processingMode === 'gpu' && gpuStatus === 'offline' && (
         <div className="fixed top-16 sm:top-20 left-0 right-0 z-40 bg-red-950/90 border-b border-red-500/30 backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 text-sm">
-              <AlertTriangle size={16} className="text-red-400 shrink-0" />
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-start sm:items-center gap-2 sm:gap-3 text-xs sm:text-sm">
+              <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5 sm:mt-0" />
               <span className="text-red-200">
-                <strong>GPU backend is offline.</strong> The server may need to be started manually. Switch to CPU for reliable processing.
+                <strong>GPU backend is offline.</strong> Switch to CPU for reliable processing.
               </span>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
               <button
                 onClick={() => recheckGpuHealth()}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5"
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-500/30 text-red-300 hover:bg-red-500/10 active:scale-95 transition-colors flex items-center gap-1.5"
               >
                 <RefreshCw size={12} />
                 Retry
               </button>
               <button
                 onClick={() => setProcessingMode('cpu')}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors flex items-center gap-1.5"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 text-white hover:bg-white/20 active:scale-95 transition-colors flex items-center gap-1.5"
               >
                 <Cpu size={12} />
                 Switch to CPU
@@ -315,13 +315,13 @@ function AppContent() {
           {/* ── Processing Mode Toggle ── */}
           {gpuAvailable && (
             <div className="w-full max-w-3xl mx-auto mb-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <div className={`flex items-center justify-between gap-3 p-3 sm:p-4 rounded-2xl border backdrop-blur-md transition-all duration-300 ${
+              <div className={`flex items-center justify-between gap-2 sm:gap-3 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border backdrop-blur-md transition-all duration-300 ${
                 isProcessing
                   ? 'bg-white/[0.02] border-white/5 opacity-60'
                   : 'bg-white/[0.03] border-white/10 hover:border-white/15'
               }`}>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xs sm:text-sm font-semibold text-zinc-400">Processing Mode</span>
+                <div className="flex items-center gap-1.5 sm:gap-2.5">
+                  <span className="text-[10px] sm:text-sm font-semibold text-zinc-400 hidden xs:inline">Processing Mode</span>
                   {/* GPU status indicator */}
                   {processingMode === 'gpu' && (
                     <div className="flex items-center gap-1.5">
@@ -338,10 +338,11 @@ function AppContent() {
                         className="relative"
                         onMouseEnter={() => setShowGpuTooltip(true)}
                         onMouseLeave={() => setShowGpuTooltip(false)}
+                        onClick={() => setShowGpuTooltip(prev => !prev)}
                       >
                         <Info size={12} className="text-yellow-500/50 cursor-help" />
                         {showGpuTooltip && (
-                          <div className="absolute left-0 top-full mt-2 w-56 p-3 bg-zinc-900/95 border border-yellow-500/20 rounded-xl text-xs text-zinc-300 shadow-xl backdrop-blur-md z-50">
+                          <div className="absolute right-0 sm:left-0 top-full mt-2 w-52 sm:w-56 p-3 bg-zinc-900/95 border border-yellow-500/20 rounded-xl text-xs text-zinc-300 shadow-xl backdrop-blur-md z-50">
                             <div className="flex items-start gap-2">
                               <Zap size={12} className="text-yellow-500 shrink-0 mt-0.5" />
                               <div>
@@ -361,30 +362,30 @@ function AppContent() {
                   )}
                 </div>
 
-                <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1">
+                <div className="flex items-center bg-white/5 border border-white/10 rounded-lg sm:rounded-xl p-0.5 sm:p-1">
                   <button
                     onClick={() => !isProcessing && setProcessingMode('cpu')}
                     disabled={isProcessing}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-300 ${
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg text-[11px] sm:text-sm font-semibold transition-all duration-300 ${
                       processingMode === 'cpu'
                         ? 'bg-white/15 text-white shadow-md'
                         : 'text-zinc-500 hover:text-zinc-300'
                     } ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   >
-                    <Cpu size={14} />
-                    <span>Standard <span className="text-[10px] sm:text-xs font-normal opacity-60">(CPU)</span></span>
+                    <Cpu size={13} />
+                    <span>Standard <span className="text-[9px] sm:text-xs font-normal opacity-60">(CPU)</span></span>
                   </button>
                   <button
                     onClick={() => !isProcessing && setProcessingMode('gpu')}
                     disabled={isProcessing}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-300 ${
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg text-[11px] sm:text-sm font-semibold transition-all duration-300 ${
                       processingMode === 'gpu'
                         ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.15)]'
                         : 'text-zinc-500 hover:text-zinc-300'
                     } ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   >
-                    <Zap size={14} />
-                    <span>Turbo <span className="text-[10px] sm:text-xs font-normal opacity-60">(GPU)</span></span>
+                    <Zap size={13} />
+                    <span>Turbo <span className="text-[9px] sm:text-xs font-normal opacity-60">(GPU)</span></span>
                   </button>
                 </div>
               </div>
@@ -411,7 +412,7 @@ function AppContent() {
               {job && isUploadingNew && (
                 <button
                   onClick={() => setIsUploadingNew(false)}
-                  className="absolute -top-12 left-1/2 -translate-x-1/2 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-full text-sm font-medium transition-colors flex items-center gap-2 z-50 text-zinc-300 hover:text-white"
+                  className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 sm:px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95 rounded-full text-xs sm:text-sm font-medium transition-colors flex items-center gap-2 z-50 text-zinc-300 hover:text-white whitespace-nowrap"
                 >
                   <X size={16} /> Cancel and Return to Session
                 </button>
