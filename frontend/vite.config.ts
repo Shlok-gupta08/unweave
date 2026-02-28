@@ -19,8 +19,9 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, '')
       },
       '/gpu-api': {
-        target: process.env.VITE_GPU_BACKEND_URL || 'http://127.0.0.1:8000',
+        target: process.env.VITE_GPU_BACKEND_URL || 'https://8000-01kj235bjnpdxvnr8x7k0x2mhq.cloudspaces.litng.ai',
         changeOrigin: true,
+        secure: true,
         rewrite: (path) => path.replace(/^\/gpu-api/, '')
       },
       '/stems': {

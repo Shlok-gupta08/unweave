@@ -77,10 +77,11 @@ export async function apiPost<T>(
  * Checks if the GPU backend is reachable.
  * Returns true if healthy, false if down/unreachable.
  * Uses a short timeout so it doesn't block the UI.
+ * Hits the root endpoint (/) as a lightweight health probe.
  */
 export async function checkGpuHealth(): Promise<boolean> {
   try {
-    await axios.get('/gpu-api/health', { timeout: 5000 });
+    await axios.get('/gpu-api/', { timeout: 5000 });
     return true;
   } catch {
     return false;
