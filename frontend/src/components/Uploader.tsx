@@ -30,6 +30,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
 
     // ── Combined timer state for dual-pass processing ──
     const [passNumber, setPassNumber] = useState(1);
+    const passNumberRef = useRef(1);
     const prevRawProgressRef = useRef(0);
     const [combinedProgress, setCombinedProgress] = useState(0);
     const [combinedEta, setCombinedEta] = useState<number | null>(null);
@@ -69,13 +70,15 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
 
                 // ── Detect dual-pass processing ──
                 // If raw progress drops significantly, we've entered pass 2
-                if (prevRawProgressRef.current > 50 && rawProgress < 20 && passNumber === 1) {
+                if (prevRawProgressRef.current > 50 && rawProgress < 20 && passNumberRef.current === 1) {
+                    passNumberRef.current = 2;
                     setPassNumber(2);
                 }
                 prevRawProgressRef.current = rawProgress;
 
                 // ── Compute combined progress & ETA ──
-                if (passNumber === 1) {
+                // Use ref (not state) so the polling closure always has the current pass
+                if (passNumberRef.current === 1) {
                     // First pass: scale to 0–50% of total
                     setCombinedProgress(Math.round(rawProgress / 2));
                     // Double the ETA to account for the second pass
@@ -96,11 +99,22 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                     setIsCancelling(false);
                     setJobId(null);
                     setPassNumber(1);
+                    passNumberRef.current = 1;
                     prevRawProgressRef.current = 0;
+
+                    // If processed on GPU, prefix stem URLs so they route through the GPU proxy
+                    const finalStems = processingMode === 'gpu'
+                        ? Object.fromEntries(
+                            Object.entries(data.stems).map(([k, v]) => [
+                                k,
+                                v.startsWith('/stems/') ? `/gpu-api${v}` : v,
+                            ])
+                          )
+                        : data.stems;
 
                     onComplete({
                         job_id: jobId,
-                        stems: data.stems,
+                        stems: finalStems,
                         message: data.message,
                         processing_time: data.processing_time ?? undefined,
                         device_used: data.device_used ?? undefined,
@@ -112,6 +126,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                     setIsCancelling(false);
                     setJobId(null);
                     setPassNumber(1);
+                    passNumberRef.current = 1;
                     prevRawProgressRef.current = 0;
                     if (data.status === 'error') {
                         setError(data.message || 'Separation failed');
@@ -134,6 +149,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                     setIsCancelling(false);
                     setJobId(null);
                     setPassNumber(1);
+                    passNumberRef.current = 1;
                     prevRawProgressRef.current = 0;
                     setError('GPU backend became unreachable during processing. Please switch to Standard (CPU) Mode.');
                     onClearJob?.();
@@ -146,6 +162,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                     setIsCancelling(false);
                     setJobId(null);
                     setPassNumber(1);
+                    passNumberRef.current = 1;
                     prevRawProgressRef.current = 0;
 
                     if (resumeJobId && onClearJob) {
@@ -184,6 +201,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
         setStatusMessage('Uploading file...');
         setDeviceUsed('');
         setPassNumber(1);
+        passNumberRef.current = 1;
         setCombinedProgress(0);
         setCombinedEta(null);
         prevRawProgressRef.current = 0;
@@ -275,6 +293,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
         setIsCancelling(false);
         setJobId(null);
         setPassNumber(1);
+        passNumberRef.current = 1;
         setCombinedProgress(0);
         setCombinedEta(null);
         prevRawProgressRef.current = 0;

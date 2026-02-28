@@ -372,7 +372,7 @@ function AppContent() {
                     } ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     <Cpu size={14} />
-                    <span>Standard</span>
+                    <span>Standard <span className="text-[10px] sm:text-xs font-normal opacity-60">(CPU)</span></span>
                   </button>
                   <button
                     onClick={() => !isProcessing && setProcessingMode('gpu')}
@@ -384,7 +384,7 @@ function AppContent() {
                     } ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     <Zap size={14} />
-                    <span>Turbo</span>
+                    <span>Turbo <span className="text-[10px] sm:text-xs font-normal opacity-60">(GPU)</span></span>
                   </button>
                 </div>
               </div>
