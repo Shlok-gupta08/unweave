@@ -18,6 +18,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       },
+      '/gpu-api': {
+        target: process.env.VITE_GPU_BACKEND_URL || 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/gpu-api/, '')
+      },
       '/stems': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
