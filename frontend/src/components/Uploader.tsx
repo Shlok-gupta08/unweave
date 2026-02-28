@@ -43,13 +43,17 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
     }, []);
 
     // Resume a job from localStorage on mount
-    useEffect(() => {
-        if (resumeJobId && !jobId) {
-            setIsUploading(true);
-            setJobId(resumeJobId);
-            setStatusMessage('Reconnecting to active job...');
-        }
-    }, [resumeJobId, jobId]);
+    // Using refs to batch state updates outside the effect
+    const pendingResumeRef = useRef(false);
+    if (resumeJobId && !jobId && !pendingResumeRef.current) {
+        pendingResumeRef.current = true;
+        setIsUploading(true);
+        setJobId(resumeJobId);
+        setStatusMessage('Reconnecting to active job...');
+    }
+    if (!resumeJobId && pendingResumeRef.current) {
+        pendingResumeRef.current = false;
+    }
 
     // Poll for job status
     useEffect(() => {
@@ -160,6 +164,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
         return () => {
             if (pollingRef.current) clearInterval(pollingRef.current);
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [jobId, processingMode, onComplete]);
 
     const onDrop = useCallback(async (acceptedFiles: File[]) => {

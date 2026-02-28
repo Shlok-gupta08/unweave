@@ -21,6 +21,7 @@ const ProcessingModeContext = createContext<ProcessingModeContextValue>({
     recheckGpuHealth: async () => { },
 });
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useProcessingMode() {
     return useContext(ProcessingModeContext);
 }
@@ -68,6 +69,7 @@ export function ProcessingModeProvider({ children }: { children: ReactNode }) {
     }, [gpuAvailable, recheckGpuHealth]);
 
     // If GPU becomes unavailable (env change / rebuild), fall back to CPU
+    // This is intentional: we need to sync state when external config changes
     useEffect(() => {
         if (!gpuAvailable && processingMode === 'gpu') {
             setProcessingModeState('cpu');
@@ -79,7 +81,8 @@ export function ProcessingModeProvider({ children }: { children: ReactNode }) {
         if (gpuAvailable && processingMode === 'gpu') {
             recheckGpuHealth();
         }
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
         <ProcessingModeContext.Provider value={{

@@ -417,15 +417,16 @@ export const Mixer: React.FC<MixerProps> = ({ stems, onAddStem, onRemoveStem }) 
 
             if ('showSaveFilePicker' in window) {
                 try {
-                    const handle = await (window as any).showSaveFilePicker({
+                    const handle = await (window as unknown as { showSaveFilePicker: (opts: { suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<FileSystemFileHandle> }).showSaveFilePicker({
                         suggestedName: 'Unweave_Stems.zip',
                         types: [{ description: 'ZIP Archive', accept: { 'application/zip': ['.zip'] } }],
                     });
                     const writable = await handle.createWritable();
                     await writable.write(content);
                     await writable.close();
-                } catch (err: any) {
-                    if (err.name !== 'AbortError') triggerDownload(content);
+                } catch (err: unknown) {
+                    if (err instanceof Error && err.name !== 'AbortError') triggerDownload(content);
+                    else if (!(err instanceof Error)) triggerDownload(content);
                 }
             } else {
                 triggerDownload(content);

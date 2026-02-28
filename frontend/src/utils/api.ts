@@ -65,7 +65,7 @@ export async function apiGet<T>(
  */
 export async function apiPost<T>(
   path: string,
-  data?: any,
+  data?: unknown,
   mode: ProcessingMode = 'cpu',
   config?: AxiosRequestConfig
 ): Promise<AxiosResponse<T>> {

@@ -106,7 +106,7 @@
 | AMD (DirectML) | `directml` | Windows | ❌ Native | ⚡ |
 | CPU | `cpu` | All | ✅ | 🐢 |
 
-> **Tip:** Set `DEVICE_OVERRIDE` in `.env` to force a specific device. See [GPU Setup Guide](docs/GPU_SETUP.md).
+> **Tip:** Set `DEVICE_OVERRIDE` in `.env` to force a specific device. See the [Environment Variables](#-environment-variables) section below.
 
 ---
 
@@ -220,6 +220,8 @@ unweave/
 ├── docker-compose.rocm.yml    # AMD ROCm override
 ├── docker-compose.cloud.yml   # Cloud optimization override
 ├── .env.example               # Environment template
+├── .github/                   # CI/CD
+│   └── workflows/deploy.yml   # GitHub Actions deployment
 ├── CONTRIBUTING.md            # Contribution guide
 └── LICENSE                    # MIT License
 ```

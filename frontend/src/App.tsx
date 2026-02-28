@@ -49,6 +49,7 @@ function AppContent() {
   const [resumeJobId, setResumeJobId] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
   const [isUploadingNew, setIsUploadingNew] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const { processingMode, setProcessingMode, gpuAvailable, gpuStatus, recheckGpuHealth } = useProcessingMode();
   const [showGpuTooltip, setShowGpuTooltip] = useState(false);
 
@@ -65,8 +66,8 @@ function AppContent() {
           if (firstOriginalStem) {
             try {
               await axios.head(firstOriginalStem[1]);
-            } catch (err: any) {
-              if (err.response?.status === 404) {
+            } catch (err: unknown) {
+              if (axios.isAxiosError(err) && err.response?.status === 404) {
                 console.warn('Server stems expired (404). Clearing stale session.');
                 clearSession();
                 setIsRestoring(false);
@@ -79,7 +80,7 @@ function AppContent() {
           const hydratedStems = { ...session.job.stems };
           let changed = false;
 
-          for (const [name, _] of Object.entries(hydratedStems)) {
+          for (const [name] of Object.entries(hydratedStems)) {
             if (name.startsWith('Merged')) {
               try {
                 const blob = await getBlobFromDB(name);
@@ -93,7 +94,7 @@ function AppContent() {
                   delete hydratedStems[name as keyof typeof hydratedStems];
                   changed = true;
                 }
-              } catch (e) {
+              } catch {
                 console.warn('Could not hydrate blob from DB for', name);
                 delete hydratedStems[name as keyof typeof hydratedStems];
                 changed = true;
@@ -112,6 +113,7 @@ function AppContent() {
         }
         if (session.activeJobId) {
           setResumeJobId(session.activeJobId);
+          setIsProcessing(true);
           setIsRestoring(false);
           return;
         }
@@ -128,6 +130,7 @@ function AppContent() {
         if (activeIds.length > 0) {
           const [activeId] = activeIds[0];
           setResumeJobId(activeId);
+          setIsProcessing(true);
           saveSession(null, activeId);
         }
 
@@ -163,11 +166,13 @@ function AppContent() {
 
   const handleJobStarted = useCallback((jobId: string) => {
     saveSession(null, jobId);
+    setIsProcessing(true);
   }, []);
 
   const handleComplete = useCallback((data: SeparationJob) => {
     setJob(data);
     setResumeJobId(null);
+    setIsProcessing(false);
     saveSession(data, null);
   }, []);
 
@@ -201,6 +206,7 @@ function AppContent() {
   const handleClearJob = useCallback(() => {
     setJob(null);
     setResumeJobId(null);
+    setIsProcessing(false);
     clearSession();
   }, []);
 
@@ -235,75 +241,7 @@ function AppContent() {
               Unweave
             </h1>
           </div>
-          <div className="hidden sm:flex items-center gap-6 text-sm font-medium text-zinc-400">
-            {/* ── Processing Mode Toggle ── */}
-            {gpuAvailable && (
-              <div className="relative flex items-center gap-2">
-                <div className="flex items-center bg-white/5 border border-white/10 rounded-full p-0.5">
-                  <button
-                    onClick={() => setProcessingMode('cpu')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-300 ${processingMode === 'cpu'
-                      ? 'bg-white/15 text-white shadow-sm'
-                      : 'text-zinc-500 hover:text-zinc-300'
-                      }`}
-                  >
-                    <Cpu size={13} />
-                    <span>Standard</span>
-                  </button>
-                  <button
-                    onClick={() => setProcessingMode('gpu')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-300 ${processingMode === 'gpu'
-                      ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.15)]'
-                      : 'text-zinc-500 hover:text-zinc-300'
-                      }`}
-                  >
-                    <Zap size={13} />
-                    <span>Turbo</span>
-                  </button>
-                </div>
-
-                {/* GPU status indicator & disclaimer tooltip */}
-                {processingMode === 'gpu' && (
-                  <div className="flex items-center gap-1.5">
-                    {/* Status dot */}
-                    {gpuStatus === 'checking' && (
-                      <RefreshCw size={12} className="text-yellow-500/60 animate-spin" />
-                    )}
-                    {gpuStatus === 'online' && (
-                      <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]" />
-                    )}
-                    {gpuStatus === 'offline' && (
-                      <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]" />
-                    )}
-
-                    <div
-                      className="relative"
-                      onMouseEnter={() => setShowGpuTooltip(true)}
-                      onMouseLeave={() => setShowGpuTooltip(false)}
-                    >
-                      <Info size={14} className="text-yellow-500/60 cursor-help" />
-                      {showGpuTooltip && (
-                        <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-zinc-900/95 border border-yellow-500/20 rounded-xl text-xs text-zinc-300 shadow-xl backdrop-blur-md z-50">
-                          <div className="flex items-start gap-2">
-                            <Zap size={12} className="text-yellow-500 shrink-0 mt-0.5" />
-                            <div>
-                              <p>Uses external GPU acceleration. Availability may vary.</p>
-                              {gpuStatus === 'offline' && (
-                                <p className="mt-1 text-red-400">⚠ GPU backend is currently unreachable.</p>
-                              )}
-                              {gpuStatus === 'online' && (
-                                <p className="mt-1 text-green-400">✓ GPU backend is online.</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
+          <div className="flex items-center gap-4 text-sm font-medium text-zinc-400">
             <a
               href="https://github.com/Shlok-gupta08/unweave"
               target="_blank"
@@ -311,7 +249,7 @@ function AppContent() {
               className="flex items-center gap-1.5 hover:text-white transition-colors duration-300"
             >
               <Github size={18} />
-              <span>GitHub</span>
+              <span className="hidden sm:inline">GitHub</span>
             </a>
           </div>
         </div>
@@ -374,6 +312,85 @@ function AppContent() {
         </div>
 
         <div className="w-full max-w-5xl">
+          {/* ── Processing Mode Toggle ── */}
+          {gpuAvailable && (
+            <div className="w-full max-w-3xl mx-auto mb-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className={`flex items-center justify-between gap-3 p-3 sm:p-4 rounded-2xl border backdrop-blur-md transition-all duration-300 ${
+                isProcessing
+                  ? 'bg-white/[0.02] border-white/5 opacity-60'
+                  : 'bg-white/[0.03] border-white/10 hover:border-white/15'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xs sm:text-sm font-semibold text-zinc-400">Processing Mode</span>
+                  {/* GPU status indicator */}
+                  {processingMode === 'gpu' && (
+                    <div className="flex items-center gap-1.5">
+                      {gpuStatus === 'checking' && (
+                        <RefreshCw size={11} className="text-yellow-500/60 animate-spin" />
+                      )}
+                      {gpuStatus === 'online' && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]" />
+                      )}
+                      {gpuStatus === 'offline' && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]" />
+                      )}
+                      <div
+                        className="relative"
+                        onMouseEnter={() => setShowGpuTooltip(true)}
+                        onMouseLeave={() => setShowGpuTooltip(false)}
+                      >
+                        <Info size={12} className="text-yellow-500/50 cursor-help" />
+                        {showGpuTooltip && (
+                          <div className="absolute left-0 top-full mt-2 w-56 p-3 bg-zinc-900/95 border border-yellow-500/20 rounded-xl text-xs text-zinc-300 shadow-xl backdrop-blur-md z-50">
+                            <div className="flex items-start gap-2">
+                              <Zap size={12} className="text-yellow-500 shrink-0 mt-0.5" />
+                              <div>
+                                <p>Uses external GPU acceleration. Availability may vary.</p>
+                                {gpuStatus === 'offline' && (
+                                  <p className="mt-1 text-red-400">GPU backend is currently unreachable.</p>
+                                )}
+                                {gpuStatus === 'online' && (
+                                  <p className="mt-1 text-green-400">GPU backend is online.</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1">
+                  <button
+                    onClick={() => !isProcessing && setProcessingMode('cpu')}
+                    disabled={isProcessing}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-300 ${
+                      processingMode === 'cpu'
+                        ? 'bg-white/15 text-white shadow-md'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    } ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    <Cpu size={14} />
+                    <span>Standard</span>
+                  </button>
+                  <button
+                    onClick={() => !isProcessing && setProcessingMode('gpu')}
+                    disabled={isProcessing}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-300 ${
+                      processingMode === 'gpu'
+                        ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.15)]'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    } ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    <Zap size={14} />
+                    <span>Turbo</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {job && !isUploadingNew ? (
             <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 fade-out-0">
               <div className="mb-6 flex flex-col sm:flex-row justify-between items-center bg-white/5 p-4 rounded-xl border border-white/10 gap-4">
