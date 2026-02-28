@@ -81,7 +81,7 @@ export async function apiPost<T>(
  */
 export async function checkGpuHealth(): Promise<boolean> {
   try {
-    await axios.get('/gpu-api/', { timeout: 5000 });
+    await axios.get('/gpu-api/health', { timeout: 5000 });
     return true;
   } catch {
     return false;
