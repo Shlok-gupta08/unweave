@@ -95,8 +95,6 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                 if (data.status === 'complete' && data.stems) {
                     if (pollingRef.current) clearInterval(pollingRef.current);
                     pollingRef.current = null;
-                    setIsUploading(false);
-                    setIsCancelling(false);
                     setJobId(null);
                     setPassNumber(1);
                     passNumberRef.current = 1;
@@ -112,13 +110,56 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                           )
                         : data.stems;
 
-                    onComplete({
-                        job_id: jobId,
-                        stems: finalStems,
-                        message: data.message,
-                        processing_time: data.processing_time ?? undefined,
-                        device_used: data.device_used ?? undefined,
-                    });
+                    // For GPU stems, download files as blobs so WaveSurfer loads
+                    // instantly from memory instead of streaming from a remote server.
+                    if (processingMode === 'gpu') {
+                        setStatusMessage('Downloading stems for playback...');
+                        setCombinedProgress(100);
+                        try {
+                            const entries = Object.entries(finalStems);
+                            const blobStems: Record<string, string> = {};
+                            for (let i = 0; i < entries.length; i++) {
+                                const [stemName, stemUrl] = entries[i];
+                                setStatusMessage(`Downloading ${stemName}... (${i + 1}/${entries.length})`);
+                                const resp = await fetch(stemUrl);
+                                if (!resp.ok) throw new Error(`Failed to download ${stemName}`);
+                                const blob = await resp.blob();
+                                blobStems[stemName] = URL.createObjectURL(
+                                    new Blob([blob], { type: 'audio/mpeg' })
+                                );
+                            }
+                            setIsUploading(false);
+                            setIsCancelling(false);
+                            onComplete({
+                                job_id: jobId,
+                                stems: blobStems,
+                                message: data.message,
+                                processing_time: data.processing_time ?? undefined,
+                                device_used: data.device_used ?? undefined,
+                            });
+                        } catch (blobErr) {
+                            console.warn('Blob prefetch failed, falling back to direct URLs:', blobErr);
+                            setIsUploading(false);
+                            setIsCancelling(false);
+                            onComplete({
+                                job_id: jobId,
+                                stems: finalStems,
+                                message: data.message,
+                                processing_time: data.processing_time ?? undefined,
+                                device_used: data.device_used ?? undefined,
+                            });
+                        }
+                    } else {
+                        setIsUploading(false);
+                        setIsCancelling(false);
+                        onComplete({
+                            job_id: jobId,
+                            stems: finalStems,
+                            message: data.message,
+                            processing_time: data.processing_time ?? undefined,
+                            device_used: data.device_used ?? undefined,
+                        });
+                    }
                 } else if (data.status === 'error' || data.status === 'cancelled') {
                     if (pollingRef.current) clearInterval(pollingRef.current);
                     pollingRef.current = null;
