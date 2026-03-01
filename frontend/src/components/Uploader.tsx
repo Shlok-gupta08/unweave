@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { UploadCloud, Cpu, Zap, Clock, AlertCircle, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 import { apiGet, apiPost, type ProcessingMode } from '../utils/api';
+import { saveBlobToDB } from '../utils/db';
 import type { SeparationJob, JobStatus } from '../types';
 
 interface UploaderProps {
@@ -124,9 +125,10 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                                 const resp = await fetch(stemUrl);
                                 if (!resp.ok) throw new Error(`Failed to download ${stemName}`);
                                 const blob = await resp.blob();
-                                blobStems[stemName] = URL.createObjectURL(
-                                    new Blob([blob], { type: 'audio/mpeg' })
-                                );
+                                const safeBlob = new Blob([blob], { type: 'audio/mpeg' });
+                                // Persist to IndexedDB so the blob survives tab close / refresh
+                                await saveBlobToDB(stemName, safeBlob);
+                                blobStems[stemName] = URL.createObjectURL(safeBlob);
                             }
                             setIsUploading(false);
                             setIsCancelling(false);

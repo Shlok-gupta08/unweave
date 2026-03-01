@@ -78,26 +78,31 @@ function AppContent() {
         if (session.job && !session.activeJobId) {
           // Pre-flight check: verify the server hasn't deleted these files (e.g., 404 on first stem)
           const stemEntries = Object.entries(session.job.stems);
+          // Pre-flight: only HEAD-check non-blob server URLs
           const firstOriginalStem = stemEntries.find(([name]) => !name.startsWith('Merged'));
           if (firstOriginalStem) {
-            try {
-              await axios.head(firstOriginalStem[1]);
-            } catch (err: unknown) {
-              if (axios.isAxiosError(err) && err.response?.status === 404) {
-                console.warn('Server stems expired (404). Clearing stale session.');
-                clearSession();
-                setIsRestoring(false);
-                return;
+            const stemUrl = firstOriginalStem[1];
+            // blob: URLs are ephemeral; they'll be re-hydrated from IndexedDB below
+            if (!stemUrl.startsWith('blob:')) {
+              try {
+                await axios.head(stemUrl);
+              } catch (err: unknown) {
+                if (axios.isAxiosError(err) && err.response?.status === 404) {
+                  console.warn('Server stems expired (404). Clearing stale session.');
+                  clearSession();
+                  setIsRestoring(false);
+                  return;
+                }
               }
             }
           }
 
-          // Hydrate dynamic dead blob urls
+          // Hydrate any dead blob: URLs from IndexedDB (GPU stems + Merged tracks)
           const hydratedStems = { ...session.job.stems };
           let changed = false;
 
-          for (const [name] of Object.entries(hydratedStems)) {
-            if (name.startsWith('Merged')) {
+          for (const [name, url] of Object.entries(hydratedStems)) {
+            if (typeof url === 'string' && url.startsWith('blob:')) {
               try {
                 const blob = await getBlobFromDB(name);
                 if (blob && blob.size > 0) {
@@ -116,6 +121,15 @@ function AppContent() {
                 changed = true;
               }
             }
+          }
+
+          // If all stems were blob: URLs and none could be hydrated, clear stale session
+          const remainingStems = Object.keys(hydratedStems).filter(k => !k.startsWith('Merged'));
+          if (remainingStems.length === 0) {
+            console.warn('No stems could be restored. Clearing stale session.');
+            clearSession();
+            setIsRestoring(false);
+            return;
           }
 
           if (changed) {
@@ -232,10 +246,8 @@ function AppContent() {
       const nextStems = { ...prev.stems };
       delete nextStems[name as keyof typeof nextStems];
 
-      // Clean up IndexedDB
-      if (name.startsWith('Merged')) {
-        deleteBlobFromDB(name).catch(console.error);
-      }
+      // Clean up IndexedDB (merged tracks + GPU-cached blobs)
+      deleteBlobFromDB(name).catch(console.error);
 
       const nextJob = { ...prev, stems: nextStems };
       saveSession(nextJob, null);
