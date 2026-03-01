@@ -37,7 +37,7 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({ availableTracks, onClo
                         <div className="p-2 bg-yellow-500/10 rounded-xl">
                             <FileAudio className="w-5 h-5 text-yellow-500" />
                         </div>
-                        <h3 className="text-xl font-bold text-white tracking-tight">Merge Layers</h3>
+                        <h3 className="text-xl font-bold text-white tracking-tight">Merge & Export Layers</h3>
                     </div>
                     {!isMerging && (
                         <button onClick={onClose} className="p-2.5 rounded-xl hover:bg-white/10 active:scale-95 text-zinc-400 hover:text-white transition-all">
@@ -49,7 +49,7 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({ availableTracks, onClo
                 {/* Body */}
                 <div className="p-4 sm:p-6 overflow-y-auto flex-1">
                     <p className="text-xs sm:text-sm text-zinc-400 mb-4 font-medium">
-                        Select the stems you want to merge into a single MP3 file:
+                        Select the layers you want to combine. They will be merged and exported as a single MP3 file.
                     </p>
 
                     <div className="flex flex-col gap-2 max-h-48 sm:max-h-60 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
@@ -93,7 +93,7 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({ availableTracks, onClo
                                 Processing...
                             </>
                         ) : (
-                            'Export MP3'
+                            'Merge & Export MP3'
                         )}
                     </button>
                 </div>

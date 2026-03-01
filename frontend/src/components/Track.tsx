@@ -163,7 +163,7 @@ const Track: React.FC<TrackProps> = ({
                         </button>
                     )}
 
-                    {/* Volume slider — inline on mobile */}
+                    {/* Volume slider — inline on mobile only, moves below on desktop */}
                     <input
                         type="range"
                         min="0"
@@ -171,9 +171,20 @@ const Track: React.FC<TrackProps> = ({
                         step="0.01"
                         value={isMuted ? 0 : volume}
                         onChange={handleVolumeChange}
-                        className="w-16 sm:w-20 h-1.5 rounded-lg cursor-pointer accent-yellow-500 ml-1"
+                        className="w-16 h-1.5 rounded-lg cursor-pointer accent-yellow-500 ml-1 sm:hidden"
                     />
                 </div>
+
+                {/* Volume slider — below buttons on desktop to avoid overlapping waveform */}
+                <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={isMuted ? 0 : volume}
+                    onChange={handleVolumeChange}
+                    className="hidden sm:block w-full h-1.5 rounded-lg cursor-pointer accent-yellow-500"
+                />
             </div>
 
             {/* Waveform */}

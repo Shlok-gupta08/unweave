@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Github, X, Cpu, Zap, Info, AlertTriangle, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import { Uploader } from './components/Uploader';
@@ -52,6 +52,22 @@ function AppContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const { processingMode, setProcessingMode, gpuAvailable, gpuStatus, recheckGpuHealth } = useProcessingMode();
   const [showGpuTooltip, setShowGpuTooltip] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const scrollRafRef = useRef(false);
+
+  // Track scroll position — hide GitHub text on mobile when scrolled
+  useEffect(() => {
+    const handleScroll = () => {
+      if (scrollRafRef.current) return;
+      scrollRafRef.current = true;
+      requestAnimationFrame(() => {
+        setIsScrolled(window.scrollY > 40);
+        scrollRafRef.current = false;
+      });
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Restore session on mount — checks both localStorage AND the server
   useEffect(() => {
@@ -249,7 +265,11 @@ function AppContent() {
               className="flex items-center gap-1.5 hover:text-white transition-colors duration-300"
             >
               <Github size={18} />
-              <span className="hidden sm:inline">GitHub</span>
+              <span className={`hidden sm:inline transition-all duration-300 overflow-hidden ${
+                isScrolled ? 'sm:max-w-0 sm:opacity-0 md:max-w-[80px] md:opacity-100' : 'max-w-[80px] opacity-100'
+              }`}>
+                GitHub
+              </span>
             </a>
           </div>
         </div>
@@ -321,18 +341,18 @@ function AppContent() {
                   : 'bg-white/[0.03] border-white/10 hover:border-white/15'
               }`}>
                 <div className="flex items-center gap-1.5 sm:gap-2.5">
-                  <span className="text-[10px] sm:text-sm font-semibold text-zinc-400 hidden xs:inline">Processing Mode</span>
-                  {/* GPU status indicator */}
+                  <span className="text-[10px] sm:text-sm font-semibold text-zinc-400">Processing Mode</span>
+                  {/* GPU status indicator — always visible next to label */}
                   {processingMode === 'gpu' && (
                     <div className="flex items-center gap-1.5">
                       {gpuStatus === 'checking' && (
                         <RefreshCw size={11} className="text-yellow-500/60 animate-spin" />
                       )}
                       {gpuStatus === 'online' && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]" />
+                        <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]" />
                       )}
                       {gpuStatus === 'offline' && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]" />
+                        <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]" />
                       )}
                       <div
                         className="relative"

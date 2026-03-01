@@ -573,9 +573,9 @@ export const Mixer: React.FC<MixerProps> = ({ stems, onAddStem, onRemoveStem }) 
                             <button
                                 onClick={() => setIsMergeDialogOpen(true)}
                                 className="flex items-center justify-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3 h-11 sm:h-14 rounded-xl bg-yellow-500/10 border border-yellow-500/30 hover:bg-yellow-500/20 active:scale-95 hover:border-yellow-500/50 text-yellow-500 text-xs sm:text-sm font-semibold transition-all duration-300 backdrop-blur-md flex-1 sm:flex-initial"
-                                title="Export combined layers as MP3"
+                                title="Merge and export selected layers as a single MP3"
                             >
-                                Merge to MP3
+                                Merge Layers
                             </button>
                             <button
                                 onClick={handleDownloadAll}
