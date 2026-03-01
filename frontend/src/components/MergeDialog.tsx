@@ -49,7 +49,7 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({ availableTracks, onClo
                 {/* Body */}
                 <div className="p-4 sm:p-6 overflow-y-auto flex-1">
                     <p className="text-xs sm:text-sm text-zinc-400 mb-4 font-medium">
-                        Select the layers you want to combine. They will be merged and exported as a single MP3 file.
+                        Select the layers you want to combine into a single file. Your original tracks will stay safe and unchanged. Once processed, the new merged layer will be ready to download and automatically added to layers and will be ready to use.
                     </p>
 
                     <div className="flex flex-col gap-2 max-h-48 sm:max-h-60 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
@@ -93,7 +93,7 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({ availableTracks, onClo
                                 Processing...
                             </>
                         ) : (
-                            'Merge & Export MP3'
+                            'Merge & Export Layers'
                         )}
                     </button>
                 </div>
