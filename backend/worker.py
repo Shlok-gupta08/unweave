@@ -1,7 +1,6 @@
 import os
 import sys
 import argparse
-import time
 
 # FFmpeg PATH Fix (Windows)
 if sys.platform == "win32":
@@ -40,23 +39,49 @@ def run_worker():
     if args.device_type == "cpu":
         torch.set_num_threads(2)
 
-    separator_kwargs = {
-        "output_dir": args.out_dir,
-        "output_format": "mp3",
-        "model_file_dir": args.models_dir,
-        "log_level": 10,  # logging.DEBUG to ensure we keep Azure Log Stream active
-    }
+    import inspect
+    try:
+        init_sig = inspect.signature(Separator.__init__)
+        has_audio_file_path = "audio_file_path" in init_sig.parameters
+    except Exception:
+        has_audio_file_path = False
 
-    if args.device_type == "directml":
-        separator_kwargs["use_directml"] = True
+    # Check both inspect signature and existence of load_model method.
+    # load_model was introduced in newer versions (~v0.9.0+) of audio-separator.
+    # We check hasattr(Separator, "load_model") as signature inspections can be obscured by @beartype decorators.
+    if has_audio_file_path or not hasattr(Separator, "load_model"):
+        print("worker: Using older audio-separator API (v0.8.x)...", file=sys.stderr)
+        old_kwargs = {
+            "output_dir": args.out_dir,
+            "output_format": "mp3",
+            "model_file_dir": args.models_dir,
+            "model_name": "htdemucs_6s.yaml",
+            "log_level": 10,
+        }
+        if args.device_type == "mps":
+            old_kwargs["use_coreml"] = True
+        elif args.device_type == "cuda":
+            old_kwargs["use_cuda"] = True
 
-    separator = Separator(**separator_kwargs)
-    separator.load_model(model_filename="htdemucs_6s.yaml")
+        # Pass audio_file_path positionally in case it is positional-only
+        separator = Separator(args.input, **old_kwargs)
+        print("worker: Separating stems...", file=sys.stderr)
+        output_files = separator.separate()
+    else:
+        print("worker: Using newer audio-separator API...", file=sys.stderr)
+        separator_kwargs = {
+            "output_dir": args.out_dir,
+            "output_format": "mp3",
+            "model_file_dir": args.models_dir,
+            "log_level": 10,
+        }
+        if args.device_type == "directml":
+            separator_kwargs["use_directml"] = True
 
-    print("worker: Separating stems...", file=sys.stderr)
-    # The Separator class natively prints tqdm to stderr because of our logger config or its own.
-    # We don't intercept it here; let it naturally stream to our parent process (main.py) which reads stderr.
-    output_files = separator.separate(args.input)
+        separator = Separator(**separator_kwargs)
+        separator.load_model(model_filename="htdemucs_6s.yaml")
+        print("worker: Separating stems...", file=sys.stderr)
+        output_files = separator.separate(args.input)
     
     # We output the completed files to STDOUT so the parent can parse them
     print(f"DONE:{','.join(output_files)}", file=sys.stdout)

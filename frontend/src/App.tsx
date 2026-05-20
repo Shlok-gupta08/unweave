@@ -50,7 +50,17 @@ function AppContent() {
   const [isRestoring, setIsRestoring] = useState(true);
   const [isUploadingNew, setIsUploadingNew] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const { processingMode, setProcessingMode, gpuAvailable, gpuStatus, recheckGpuHealth } = useProcessingMode();
+  const { 
+    processingMode, 
+    setProcessingMode, 
+    gpuAvailable, 
+    gpuStatus, 
+    recheckGpuHealth,
+    primaryDeviceType,
+    primaryDeviceName,
+    primaryGpuAvailable,
+    primaryHealthChecked
+  } = useProcessingMode();
   const [showGpuTooltip, setShowGpuTooltip] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const scrollRafRef = useRef(false);
@@ -341,6 +351,19 @@ function AppContent() {
           <p className="text-base sm:text-xl text-zinc-400 font-medium leading-relaxed max-w-2xl mx-auto drop-shadow-md px-4">
             Upload any audio track and instantly isolate <span className="text-zinc-100">Vocals, Drums, Bass, Guitar,</span> and <span className="text-zinc-100">Piano</span>. Studio-grade stem separation powered by AI.
           </p>
+
+          {primaryHealthChecked && (
+            <div className="mt-8 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.04] border border-white/5 backdrop-blur-md shadow-[0_0_15px_rgba(255,255,255,0.02)] transition-all duration-500 hover:bg-white/[0.06] hover:border-white/10">
+              <span className={`w-2.5 h-2.5 rounded-full ${primaryGpuAvailable ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)] animate-pulse' : 'bg-zinc-500 shadow-[0_0_4px_rgba(115,115,115,0.4)]'}`} />
+              <span className="text-xs text-zinc-400 font-semibold tracking-wide">
+                {primaryGpuAvailable ? (
+                  <>Local GPU Active: <span className="text-yellow-400">{primaryDeviceName}</span></>
+                ) : (
+                  <>Running on: <span className="text-zinc-200">{primaryDeviceName}</span></>
+                )}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="w-full max-w-5xl">
@@ -398,26 +421,31 @@ function AppContent() {
                   <button
                     onClick={() => !isProcessing && setProcessingMode('cpu')}
                     disabled={isProcessing}
-                    className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg text-[11px] sm:text-sm font-semibold transition-all duration-300 ${
+                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg text-[11px] sm:text-sm font-semibold transition-all duration-300 ${
                       processingMode === 'cpu'
                         ? 'bg-white/15 text-white shadow-md'
                         : 'text-zinc-500 hover:text-zinc-300'
                     } ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   >
-                    <Cpu size={13} />
-                    <span>Standard <span className="text-[9px] sm:text-xs font-normal opacity-60">(CPU)</span></span>
+                    {primaryGpuAvailable ? <Zap size={13} className="text-yellow-400" /> : <Cpu size={13} />}
+                    <span>
+                      {primaryGpuAvailable ? 'Local GPU' : 'Standard'}{' '}
+                      <span className="text-[9px] sm:text-xs font-normal opacity-60">
+                        ({primaryGpuAvailable ? (primaryDeviceType === 'mps' ? 'MPS' : 'CUDA') : 'CPU'})
+                      </span>
+                    </span>
                   </button>
                   <button
                     onClick={() => !isProcessing && setProcessingMode('gpu')}
                     disabled={isProcessing}
-                    className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg text-[11px] sm:text-sm font-semibold transition-all duration-300 ${
+                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg text-[11px] sm:text-sm font-semibold transition-all duration-300 ${
                       processingMode === 'gpu'
                         ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.15)]'
                         : 'text-zinc-500 hover:text-zinc-300'
                     } ${isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     <Zap size={13} />
-                    <span>Turbo <span className="text-[9px] sm:text-xs font-normal opacity-60">(GPU)</span></span>
+                    <span>Turbo <span className="text-[9px] sm:text-xs font-normal opacity-60">(Cloud GPU)</span></span>
                   </button>
                 </div>
               </div>

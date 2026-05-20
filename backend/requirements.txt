@@ -3,6 +3,7 @@ fastapi
 uvicorn[standard]
 python-multipart
 aiofiles
+numpy<2
 audio-separator[gpu]
 
 # Note: PyTorch is installed separately with the correct index URL

@@ -139,7 +139,6 @@ deactivate
 # -----------------------------------------------------------
 echo -e "${YELLOW}[6/6] Setting up frontend...${NC}"
 cd frontend && npm install && cd ..
-npm install
 
 # -----------------------------------------------------------
 # Create .env if not exists
