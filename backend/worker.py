@@ -1,5 +1,19 @@
 import os
 import sys
+
+# Auto-activate virtual environment if run directly with system Python
+try:
+    from audio_separator.separator import Separator
+except ImportError:
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    _venv_bin = os.path.join(_script_dir, ".venv", "bin" if sys.platform != "win32" else "Scripts")
+    _venv_python = os.path.join(_venv_bin, "python" + (".exe" if sys.platform == "win32" else ""))
+    if os.path.exists(_venv_python):
+        os.execv(_venv_python, [_venv_python] + sys.argv)
+    else:
+        print("Error: audio-separator is not installed and no virtual environment was found at backend/.venv.", file=sys.stderr)
+        sys.exit(1)
+
 import argparse
 
 # FFmpeg PATH Fix (Windows)
@@ -19,8 +33,6 @@ if sys.platform == "win32":
                 os.environ["PATH"] = _dir + os.pathsep + os.environ.get("PATH", "")
                 print(f"worker: Added ffmpeg to PATH from: {_dir}", file=sys.stderr)
                 break
-
-from audio_separator.separator import Separator
 
 def run_worker():
     parser = argparse.ArgumentParser()
