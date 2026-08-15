@@ -11,10 +11,10 @@ export default defineConfig({
   ],
   server: {
     host: '0.0.0.0', // Important for Docker
-    port: 5173,
+    port: 5180,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:8010',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       },
@@ -25,7 +25,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/gpu-api/, '')
       },
       '/stems': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:8010',
         changeOrigin: true,
       }
     }

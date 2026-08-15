@@ -1,0 +1,14 @@
+{
+  "name": "unweave",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "cd backend && .venv/bin/python -m uvicorn main:app --reload --port 8010",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "install:all": "npm install --prefix frontend && cd backend && .venv/bin/pip install -r requirements.txt"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
