@@ -554,6 +554,7 @@ def release_gpu_memory():
 # Routes
 # ============================================================
 @app.get("/health")
+@app.get("/api/health")
 async def health():
     gpu_info = {
         "status": "ok",
@@ -570,6 +571,9 @@ async def health():
 
 
 @app.post("/separate/")
+@app.post("/separate")
+@app.post("/api/separate/")
+@app.post("/api/separate")
 async def separate_audio(file: UploadFile = File(...)):
     """Upload audio and enqueue separation. Returns job_id for status polling."""
 
@@ -636,6 +640,7 @@ async def separate_audio(file: UploadFile = File(...)):
 
 
 @app.get("/status/{job_id}")
+@app.get("/api/status/{job_id}")
 async def get_status(job_id: str):
     """Poll this endpoint for real-time separation progress."""
     job = get_job(job_id)
@@ -645,6 +650,7 @@ async def get_status(job_id: str):
 
 
 @app.get("/jobs")
+@app.get("/api/jobs")
 async def list_jobs():
     """List all active jobs. Used by frontend to reconnect after page reload."""
     with jobs_lock:
@@ -659,6 +665,7 @@ async def list_jobs():
 
 
 @app.post("/cancel/{job_id}")
+@app.post("/api/cancel/{job_id}")
 async def cancel_job(job_id: str):
     """Instantly terminate or dequeue a separation job process by ID."""
     job = get_job(job_id)

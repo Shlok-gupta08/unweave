@@ -253,7 +253,7 @@ function buildMacMenu() {
         {
           label: 'Timeline Editor',
           accelerator: 'CmdOrCtrl+2',
-          click: () => sendMenuAction('navigate', 'timeline')
+          click: () => sendMenuAction('navigate', 'editor')
         },
         {
           label: 'Live Mixer Console',

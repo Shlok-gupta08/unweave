@@ -1,3 +1,5 @@
+import { resolveStemUrl } from './api';
+
 /**
  * Waveform extraction and Canvas rendering utilities for DAW Timeline clips.
  */
@@ -52,8 +54,9 @@ export async function getOrFetchAudioBuffer(
         return audioBufferCache.get(url)!;
     }
 
+    const resolvedUrl = resolveStemUrl(url);
     const ctx = audioContext || new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const response = await fetch(url);
+    const response = await fetch(resolvedUrl);
     const arrayBuffer = await response.arrayBuffer();
     const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
 

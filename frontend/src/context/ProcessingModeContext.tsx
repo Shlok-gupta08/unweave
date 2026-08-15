@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import axios from 'axios';
-import { isGpuAvailable, checkGpuHealth, type ProcessingMode } from '../utils/api';
+import { isGpuAvailable, checkGpuHealth, getBaseUrl, type ProcessingMode } from '../utils/api';
 
 const STORAGE_KEY = 'unweave_processing_mode';
 
@@ -60,11 +60,12 @@ export function ProcessingModeProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const fetchPrimaryHealth = async () => {
             try {
+                const base = getBaseUrl();
                 const res = await axios.get<{
                     device_type: string;
                     device_name: string;
                     gpu_available: boolean;
-                }>('/api/health');
+                }>(`${base}/api/health`);
                 
                 if (res.data) {
                     setPrimaryDeviceType(res.data.device_type || 'cpu');

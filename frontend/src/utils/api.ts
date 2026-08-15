@@ -16,6 +16,34 @@ declare global {
 export type ProcessingMode = 'cpu' | 'gpu';
 
 /**
+ * Returns the base backend origin if running in desktop Electron (file:// protocol),
+ * or empty string if running in browser with proxy/nginx.
+ */
+export function getBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    if (window.electronAPI?.isDesktop || window.location.protocol === 'file:') {
+      return 'http://127.0.0.1:8010';
+    }
+  }
+  return '';
+}
+
+/**
+ * Resolves a stem audio URL to an absolute URL if needed in desktop mode.
+ */
+export function resolveStemUrl(url: string | undefined): string {
+  if (!url) return '';
+  if (url.startsWith('blob:') || url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const base = getBaseUrl();
+  if (url.startsWith('/')) {
+    return `${base}${url}`;
+  }
+  return `${base}/${url}`;
+}
+
+/**
  * Returns true if a GPU backend is configured.
  * - In production: reads from runtime-config.js (generated at container start)
  * - In development: reads from VITE_GPU_BACKEND_URL env var
@@ -37,15 +65,16 @@ export function isGpuAvailable(): boolean {
  *   CPU → /api/   (proxied to BACKEND_URL)
  *   GPU → /gpu-api/ (proxied to GPU_BACKEND_URL)
  *
- * In development (Vite proxy):
- *   CPU → /api/   (proxied via vite.config.ts)
- *   GPU → /gpu-api/ (proxied via vite.config.ts)
+ * In desktop (Electron file://):
+ *   CPU → http://127.0.0.1:8010/api
+ *   GPU → http://127.0.0.1:8010/gpu-api
  */
 export function getApiPrefix(mode: ProcessingMode): string {
+  const base = getBaseUrl();
   if (mode === 'gpu' && isGpuAvailable()) {
-    return '/gpu-api';
+    return `${base}/gpu-api`;
   }
-  return '/api';
+  return `${base}/api`;
 }
 
 /**
@@ -81,7 +110,8 @@ export async function apiPost<T>(
  */
 export async function checkGpuHealth(): Promise<boolean> {
   try {
-    await axios.get('/gpu-api/health', { timeout: 5000 });
+    const base = getBaseUrl();
+    await axios.get(`${base}/gpu-api/health`, { timeout: 5000 });
     return true;
   } catch {
     return false;
@@ -96,5 +126,6 @@ export async function apiHead(
   url: string,
   config?: AxiosRequestConfig
 ): Promise<AxiosResponse> {
-  return axios.head(url, config);
+  const resolvedUrl = resolveStemUrl(url);
+  return axios.head(resolvedUrl, config);
 }
