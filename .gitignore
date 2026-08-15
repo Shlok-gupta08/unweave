@@ -3,6 +3,8 @@
 # ===========================
 node_modules/
 dist/
+dist-desktop/
+*.dmg
 dist-ssr/
 *.local
 .vite/

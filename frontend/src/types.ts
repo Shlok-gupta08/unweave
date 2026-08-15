@@ -101,3 +101,15 @@ export interface ExportOptions {
     normalize: boolean;
 }
 
+declare global {
+    interface Window {
+        electronAPI?: {
+            isDesktop: boolean;
+            platform: string;
+            onMenuAction: (callback: (action: string, payload?: unknown) => void) => () => void;
+            sendAction: (channel: string, data?: unknown) => void;
+            invokeAction: (channel: string, data?: unknown) => Promise<unknown>;
+        };
+    }
+}
+

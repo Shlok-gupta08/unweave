@@ -854,6 +854,39 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [togglePlay, splitClipAtPlayhead, selectedClipId, removeClip, undo, redo]);
 
+    // Listen to native macOS Desktop Transport & Track menu actions
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.electronAPI?.onMenuAction) {
+            const unsubscribe = window.electronAPI.onMenuAction((action) => {
+                if (action === 'toggle-play') {
+                    togglePlay();
+                } else if (action === 'stop-rewind') {
+                    pause();
+                    seek(0);
+                } else if (action === 'seek-forward') {
+                    seek(Math.min(project.duration, project.playheadTime + 5));
+                } else if (action === 'seek-backward') {
+                    seek(Math.max(0, project.playheadTime - 5));
+                } else if (action === 'add-track') {
+                    addTrack();
+                } else if (action === 'split-clip') {
+                    splitClipAtPlayhead();
+                } else if (action === 'toggle-snap') {
+                    toggleSnapping();
+                } else if (action === 'reset-tracks') {
+                    resetAllTracksToDefaults();
+                } else if (action === 'reset-master-volume') {
+                    setMasterVolume(1.0);
+                } else if (action === 'undo') {
+                    undo();
+                } else if (action === 'redo') {
+                    redo();
+                }
+            });
+            return unsubscribe;
+        }
+    }, [togglePlay, pause, seek, project.duration, project.playheadTime, addTrack, splitClipAtPlayhead, toggleSnapping, resetAllTracksToDefaults, setMasterVolume, undo, redo]);
+
     return (
         <TimelineContext.Provider value={{
             project,

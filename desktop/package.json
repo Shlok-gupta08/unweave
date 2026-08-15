@@ -1,0 +1,92 @@
+{
+  "name": "unweave-desktop",
+  "productName": "Unweave",
+  "version": "1.0.0",
+  "description": "AI Audio Stem Separation & Studio DAW Suite for macOS",
+  "main": "main.js",
+  "author": "Unweave",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:dmg": "electron-builder --mac dmg"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.unweave.studio",
+    "productName": "Unweave",
+    "copyright": "Copyright © 2025-2026 Unweave",
+    "directories": {
+      "output": "../dist-desktop"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "assets/**/*",
+      {
+        "from": "../frontend/dist",
+        "to": "frontend/dist"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!models/**/*",
+          "!temp_audio/**/*",
+          "!static_stems/**/*",
+          "!__pycache__/**/*",
+          "!.venv/**/share/**/*",
+          "!.venv/**/man/**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "darkModeSupport": true,
+      "minimumSystemVersion": "12.0.0"
+    },
+    "dmg": {
+      "title": "Unweave Studio Installer",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    }
+  }
+}

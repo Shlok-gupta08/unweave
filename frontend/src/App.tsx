@@ -26,6 +26,7 @@ function AppContent() {
 
   const [isScrolled, setIsScrolled] = useState(false);
   const scrollRafRef = useRef(false);
+  const isDesktop = typeof window !== 'undefined' && Boolean(window.electronAPI?.isDesktop);
 
   // Track scroll position
   useEffect(() => {
@@ -41,6 +42,22 @@ function AppContent() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Listen to native macOS desktop menu actions
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.electronAPI?.onMenuAction) {
+      const unsubscribe = window.electronAPI.onMenuAction((action, payload) => {
+        if (action === 'navigate' && typeof payload === 'string') {
+          setActiveTab(payload as WorkspaceTab);
+        } else if (action === 'import-audio') {
+          setActiveTab('separate');
+        } else if (action === 'export-mixdown' || action === 'export-all-stems') {
+          setActiveTab('export');
+        }
+      });
+      return unsubscribe;
+    }
+  }, []);
+
   const handleTurboGpuClick = () => {
     // Show user-friendly notice without breaking codebase
     setShowGpuUnavailableModal(true);
@@ -49,11 +66,15 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-black text-slate-50 font-sans selection:bg-yellow-500/30 pb-20 overflow-x-hidden flex flex-col justify-between">
       {/* Fixed Top Header */}
-      <header className="fixed w-full bg-black/60 border-b border-white/5 top-0 z-50 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between">
+      <header
+        className="fixed w-full bg-black/60 border-b border-white/5 top-0 z-50 backdrop-blur-xl"
+        style={isDesktop ? { WebkitAppRegion: 'drag' } as React.CSSProperties : undefined}
+      >
+        <div className={`max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between ${isDesktop ? 'pl-20' : ''}`}>
           <div
             onClick={() => setActiveTab('separate')}
             className="flex items-center gap-2 group cursor-pointer"
+            style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
           >
             <div className="relative h-9 sm:h-10 flex items-center justify-center overflow-hidden rounded-xl drop-shadow-[0_0_15px_rgba(250,204,21,0.2)] transition-all duration-500 group-hover:scale-105 group-hover:drop-shadow-[0_0_25px_rgba(255,215,0,0.5)]">
               <img src="/logo_NavBar.png" alt="Unweave Logo" className="h-full w-auto object-contain opacity-85 brightness-90 rounded-xl" />
