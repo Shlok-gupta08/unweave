@@ -15,6 +15,11 @@ declare global {
 
 export type ProcessingMode = 'cpu' | 'gpu';
 
+// Automatically set default axios baseURL if running inside desktop standalone app
+if (typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.electronAPI?.isDesktop)) {
+  axios.defaults.baseURL = 'http://127.0.0.1:8010';
+}
+
 /**
  * Returns the base backend origin if running in desktop Electron (file:// protocol),
  * or empty string if running in browser with proxy/nginx.
