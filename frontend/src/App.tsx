@@ -79,14 +79,14 @@ function AppContent() {
         className="fixed w-full bg-black/60 border-b border-white/5 top-0 z-50 backdrop-blur-xl"
         style={isDesktop ? { WebkitAppRegion: 'drag' } as React.CSSProperties : undefined}
       >
-        <div className={`max-w-7xl mx-auto px-3 sm:px-5 h-13 sm:h-15 flex items-center justify-between ${isDesktop ? 'pl-20' : ''}`}>
+        <div className={`max-w-7xl mx-auto px-3 sm:px-5 h-14 sm:h-16 flex items-center justify-between ${isDesktop ? 'pl-20' : ''}`}>
           <div
             onClick={() => setActiveTab('separate')}
-            className="flex items-center gap-2 group cursor-pointer"
+            className="flex items-center gap-2.5 group cursor-pointer"
             style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
           >
-            <div className="relative h-9 sm:h-10 w-auto flex items-center justify-center transition-all duration-300 group-hover:scale-105">
-              <img src="./logo_NavBar.png" alt="Unweave Logo" className="h-full w-auto max-h-9 sm:max-h-10 object-contain drop-shadow-[0_0_15px_rgba(250,204,21,0.45)]" />
+            <div className="relative h-10 sm:h-12 flex items-center justify-center overflow-hidden rounded-xl drop-shadow-[0_0_15px_rgba(250,204,21,0.25)] transition-all duration-300 group-hover:scale-105">
+              <img src="./logo_NavBar.png" alt="Unweave Logo" className="h-full w-auto object-contain rounded-xl" />
             </div>
             <h1 className="text-xl sm:text-2xl font-black tracking-tighter bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
               Unweave
