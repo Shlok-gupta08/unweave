@@ -77,7 +77,7 @@ function AppContent() {
             style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
           >
             <div className="relative h-9 sm:h-10 flex items-center justify-center overflow-hidden rounded-xl drop-shadow-[0_0_15px_rgba(250,204,21,0.2)] transition-all duration-500 group-hover:scale-105 group-hover:drop-shadow-[0_0_25px_rgba(255,215,0,0.5)]">
-              <img src="/logo_NavBar.png" alt="Unweave Logo" className="h-full w-auto object-contain opacity-85 brightness-90 rounded-xl" />
+              <img src="./logo_NavBar.png" alt="Unweave Logo" className="h-full w-auto object-contain opacity-85 brightness-90 rounded-xl" />
             </div>
             <h1 className="text-xl sm:text-2xl font-black tracking-tighter bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
               Unweave
