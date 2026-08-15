@@ -85,10 +85,10 @@ function AppContent() {
             className="flex items-center gap-2 group cursor-pointer"
             style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
           >
-            <div className="relative h-8 sm:h-9 w-8 sm:w-9 flex items-center justify-center overflow-hidden rounded-lg transition-all duration-300 group-hover:scale-105">
-              <img src="./logo_NavBar.png" alt="Unweave Logo" className="h-full w-full object-contain drop-shadow-[0_0_12px_rgba(250,204,21,0.4)]" />
+            <div className="relative h-9 sm:h-10 w-auto flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+              <img src="./logo_NavBar.png" alt="Unweave Logo" className="h-full w-auto max-h-9 sm:max-h-10 object-contain drop-shadow-[0_0_15px_rgba(250,204,21,0.45)]" />
             </div>
-            <h1 className="text-lg sm:text-xl font-black tracking-tighter bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tighter bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
               Unweave
             </h1>
           </div>
