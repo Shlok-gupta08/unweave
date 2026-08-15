@@ -5,7 +5,7 @@
 <h1 align="center">Unweave</h1>
 
 <p align="center">
-  <strong>Visualize the layers. Isolate the sound.</strong>
+  <strong>Visualize the layers. Isolate the sound. Produce without limits.</strong>
 </p>
 
 <p align="center">
@@ -16,109 +16,99 @@
 </p>
 
 <p align="center">
-  Upload any audio track and instantly isolate <strong>Vocals, Drums, Bass, Guitar, Piano & Other</strong>.<br/>
-  Studio-grade 6-stem separation powered by AI.
+  Upload any audio track and isolate <strong>Vocals, Drums, Bass, Guitar, Piano & Other</strong>.<br/>
+  Full-featured in-browser DAW workspace with Multi-Track Timeline, Live Mixer Console, Stem Merging, and Studio Mixdown Export.
 </p>
 
 ---
 
 ## ✨ Features
 
-### AI Separation Engine
-- 🧠 **6-Stem AI Separation** — Powered by `htdemucs_6s` (Hybrid Transformer Demucs) for studio-grade isolation of Vocals, Drums, Bass, Guitar, Piano, and Other
-- ⚡ **Multi-GPU Support** — NVIDIA CUDA, Apple Silicon MPS, AMD ROCm/DirectML, and CPU fallback
-- 📊 **Real-Time Progress** — Live progress bar with ETA, powered by tqdm parsing from a subprocess worker
-- 🔄 **Background Processing** — Separation runs in a subprocess so the API stays responsive
-- 🛑 **Cancel Anytime** — Instantly terminate a running separation job with process-level cancellation
+### 🧠 AI Separation Engine & Memory Management
+- 🧬 **6-Stem AI Separation** — Powered by `htdemucs_6s` (Hybrid Transformer Demucs) for studio-grade isolation of Vocals, Drums, Bass, Guitar, Piano, and Other.
+- 🛡️ **Memory-Curtailed Serial Execution** — Intelligent queue pipeline processes multi-song batches sequentially with model caching to prevent high RAM/swap exhaustion and OS lockups.
+- ⚡ **Multi-Hardware Support** — Automatic hardware acceleration on NVIDIA CUDA, Apple Silicon MPS, AMD ROCm/DirectML, or CPU fallback.
+- 📊 **Real-Time Progress & ETA** — Live percentage progress tracking with dynamic time estimation parsed directly from the separation subprocess.
+- 🛑 **Instant Job Cancellation** — Process-level cancellation to immediately terminate active or queued jobs and free resources.
 
-### Interactive Mixer
-- 🎵 **Play / Pause All** — Global transport control that plays or pauses all tracks in perfect sync without altering mute states
-- 🎧 **Solo Play** — Click the play button on any individual track to solo it (mutes all others and starts synced playback)
-- 🔇 **Mute / Unmute** — Toggle mute on individual tracks; muted tracks stay silent even during global play
-- 🔊 **Unmute All** — Dedicated button to unmute all tracks at once
-- 🔀 **Volume Control** — Per-track volume slider for precise mixing
-- ⏹️ **Reset Position** — Jump all tracks back to the start
-- 📍 **Markers** — Drop up to 3 time markers for quick navigation to specific positions
-- ↩️ **Undo / Redo** — Full undo/redo history for mute states and markers (Ctrl+Z / Ctrl+Y)
-- 🔗 **Merge to MP3** — Select multiple stems and merge them into a single MP3 track, added as a new layer
-- 📥 **Download All** — Export all separated stems as a ZIP archive with native file picker support
-- 🗑️ **Remove Merged Tracks** — Delete merged layers you no longer need
-- 🎯 **Drift Correction** — Automatic sync correction every 200ms to keep all tracks perfectly aligned
+### ⏱️ DAW Multi-Track Timeline Workspace
+- 🎹 **Multi-Track Audio Sequencing** — Add, arrange, trim, and split audio clips across independent color-coded tracks.
+- 🧲 **Magnetic Snapping Grid** — Configurable snap increments (`0.1s`, `0.5s`, `1.0s`, or `Free/Off`) for seamless clip alignment.
+- ✂️ **Precision Audio Trimming & Splitting** — Interactive clip trimming with drag handles and split-at-playhead functionality.
+- 📍 **Intelligent Playhead Auto-Follow** — Viewport smoothly follows the playback needle across long arrangements without interrupting manual user scrolling.
+- 🎛️ **Lossless Layer Merging** — Select any combination of timeline tracks and merge them instantly into a new lossless 16-bit PCM WAV layer, with destination Song Bucket assignment.
+- 📂 **Collapsible Media Pool** — Browse ready stems across multiple song buckets, drag-and-drop into tracks, or import all stems in one click.
 
-### Waveform Visualization
-- 📈 **Real-Time Waveforms** — Powered by WaveSurfer.js with color-coded tracks per stem type
-- 🖱️ **Click-to-Seek** — Click anywhere on any waveform to seek all tracks to that position
-- 📍 **Marker Overlays** — Visual dashed-line overlays spanning all tracks at marker positions
+### 🎚️ Studio Live Mixer Console
+- 🎛️ **Channel Strips** — Dedicated compact strips with bold stem identification (`VOCALS`, `DRUMS`, `BASS`, `GUITAR`, `PIANO`, `OTHER`, `MERGED`).
+- 🎚️ **Mathematically Calibrated dB Faders** — Logarithmically calibrated volume sliders aligning precisely with standard studio decibel scales (`+3.5 dB` to `-\infty dB`).
+- 📊 **60fps Real-Time Stereo VU Metering** — Live dynamic peak and RMS audio level beaming powered by Web Audio API `AnalyserNode`.
+- 🔇 **Mutually Exclusive Mute & Solo** — Soloing a track automatically clears mute, and muting automatically clears solo for foolproof mixing workflows.
+- 🎛️ **3-Band Parametric EQ & Stereo Pan** — Independent High (10kHz), Mid (1kHz), Low (80Hz) gain controls ($\pm 12\text{ dB}$) and stereo balance.
+- 🛡️ **Master Bus & Limiter** — Streamlined master output strip with integrated peak limiter ($-1.0\text{ dBFS}$) and one-click Unity Gain reset.
+- ⏱️ **Real-Time Overview Scrubber** — Synchronized master waveform mini-map with real-time 60fps playhead sweeping.
 
-### UI & UX
-- 🎨 **True Black Premium Design** — Glassmorphism effects, ambient glow, backdrop blur throughout
-- 📱 **Fully Responsive** — Calibrated for desktop, tablet, and phone screens
-- 🎚️ **Custom Dialogs** — No browser `confirm()` or `alert()` — all dialogs are styled in-app
-- 💾 **Session Persistence** — Stems saved to IndexedDB so they survive page refreshes
-- 🧭 **Drag & Drop Upload** — Intuitive file upload with drag-and-drop support and file type validation
-
-### Infrastructure
-- 🐳 **Production Dockerized** — Multi-stage frontend build (Node → Nginx), GPU-accelerated backend
-- ☁️ **Cloud-Ready** — Optimized for Azure Container Instances and GCP Cloud Run with GPU
-- 🔁 **GitHub CI/CD** — Auto-deploy on push via GitHub Actions (no local rebuilds needed)
-- 🧹 **Auto Cleanup** — Background thread that periodically cleans up old stems and expired job entries
-- 💚 **Health Checks** — Both frontend (`/nginx-health`) and backend (`/health`) expose health endpoints
+### 🚀 Export & Mixdown Hub
+- 💾 **Multi-Format Export** — Studio-quality Lossless WAV (16/24/32-bit PCM) or High-Bitrate MP3 (128/192/256/320 kbps).
+- 🎚️ **Custom Stem Mixdown** — Selectively toggle which active tracks to include in the rendered master file.
+- 📦 **Bulk ZIP Packaging** — Export all individual isolated stems in a clean `.zip` archive.
+- ⚡ **Turbo Cloud GPU Toggle** — Seamlessly switch between local processing and cloud RunPod serverless GPU infrastructure.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      User Browser                        │
-└──────────────────────────┬──────────────────────────────┘
-                           │ HTTP (port 80)
-┌──────────────────────────▼──────────────────────────────┐
-│              Frontend Container (Nginx)                   │
-│        React 19 · Vite · Tailwind CSS v4 · WaveSurfer     │
-│   Serves SPA · Proxies /api/* and /stems/* to backend     │
-└──────────────────────────┬──────────────────────────────┘
-                           │ reverse proxy
-┌──────────────────────────▼──────────────────────────────┐
-│              Backend Container (FastAPI)                   │
-│        Python 3.11 · PyTorch · Demucs · FFmpeg            │
-│                                                           │
-│   GPU: CUDA → MPS → DirectML → CPU (auto-detect)         │
-│   Worker: subprocess-based separation with tqdm parsing   │
-└─────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                              User Browser                              │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ HTTP (port 80 / 5180)
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                       Frontend (React 19 + Vite)                       │
+│  • DAW Timeline Engine (Multi-clip, Snapping, Splitting, Auto-follow) │
+│  • Live Mixer Console (Web Audio API, 60fps VU Meters, 3-Band EQ)     │
+│  • Media Pool & Song Bucket Library (IndexedDB Blob Store)             │
+│  • Lossless WAV PCM Encoder & MP3 Export Pipeline                     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ REST API / Reverse Proxy
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                         Backend (FastAPI + Python)                     │
+│  • Hardware Acceleration Detection (CUDA / MPS / ROCm / CPU)          │
+│  • Serial Worker Queue (Memory-safe Demucs Model Caching)              │
+│  • Hybrid Transformer Demucs (htdemucs_6s 6-Stem Isolation)           │
+│  • Async Audio Normalization, Resampling & Subprocess Worker           │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-| Layer | Technologies |
-|-------|-------------|
-| **Frontend** | React 19, Vite 7, Tailwind CSS v4, WaveSurfer.js 7, Lucide React, JSZip, lamejs |
-| **Backend** | Python 3.11, FastAPI, PyTorch, Demucs (htdemucs_6s), audio-separator, FFmpeg |
-| **Infra** | Docker (multi-stage), Nginx, Docker Compose (NVIDIA / CPU / ROCm / Cloud) |
+| Component | Technologies |
+|-----------|--------------|
+| **Frontend** | React 19, Vite 7, Tailwind CSS, Web Audio API, Canvas Waveforms, Lucide Icons, JSZip |
+| **Backend** | Python 3.11, FastAPI, PyTorch, Demucs (`htdemucs_6s`), FFmpeg, Uvicorn |
+| **Infrastructure** | Docker (multi-stage), Nginx, Docker Compose (CUDA / ROCm / CPU / Cloud) |
 
 ---
 
-## ⚡ GPU Support
+## ⚡ Hardware Acceleration
 
-| GPU | Backend | OS | Docker | Speed |
-|-----|---------|------|--------|-------|
-| NVIDIA (CUDA) | `cuda` | Win, Linux | ✅ | ⚡⚡⚡ |
-| Apple Silicon (MPS) | `mps` | macOS | ❌ Native | ⚡⚡ |
-| AMD (ROCm) | `rocm` | Linux | ✅ | ⚡⚡ |
-| AMD (DirectML) | `directml` | Windows | ❌ Native | ⚡ |
-| CPU | `cpu` | All | ✅ | 🐢 |
-
-> **Tip:** Set `DEVICE_OVERRIDE` in `.env` to force a specific device. See the [Environment Variables](#-environment-variables) section below.
+| Device / GPU | Backend | Supported OS | Docker | Processing Speed |
+|--------------|---------|--------------|--------|------------------|
+| NVIDIA (CUDA) | `cuda` | Windows, Linux | ✅ | ⚡⚡⚡ (Fastest) |
+| Apple Silicon (MPS) | `mps` | macOS | Native | ⚡⚡ (Fast) |
+| AMD (ROCm) | `rocm` | Linux | ✅ | ⚡⚡ (Fast) |
+| AMD (DirectML) | `directml` | Windows | Native | ⚡ (Moderate) |
+| CPU Fallback | `cpu` | All platforms | ✅ | 🐢 (Reliable) |
 
 ---
 
 ## 🚀 Quick Start
 
-### One-Click Install
+### One-Click Installer
 
-**Windows:**
-```powershell
+**macOS (Apple Silicon & Intel):**
+```bash
 git clone https://github.com/Shlok-gupta08/unweave.git
 cd unweave
-powershell -ExecutionPolicy Bypass -File scripts\install.ps1
+chmod +x scripts/install-mac.sh && ./scripts/install-mac.sh
 ```
 
 **Linux:**
@@ -128,150 +118,108 @@ cd unweave
 chmod +x scripts/install.sh && ./scripts/install.sh
 ```
 
-**macOS (Apple Silicon & Intel):**
-```bash
+**Windows:**
+```powershell
 git clone https://github.com/Shlok-gupta08/unweave.git
 cd unweave
-chmod +x scripts/install-mac.sh && ./scripts/install-mac.sh
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
 
-The installer automatically detects your GPU and installs the correct PyTorch build.
+### Manual Development Setup
 
-### Start the App
+1. **Backend:**
+   ```bash
+   cd backend
+   python3 -m venv .venv
+   source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+   pip install -r requirements.txt
+   python -m uvicorn main:app --reload --port 8010
+   ```
 
-```bash
-npm run dev
-```
+2. **Frontend:**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
 
-- 🎨 **UI:** http://localhost:5173
-- 🔧 **API:** http://localhost:8000
-- 💚 **Health:** http://localhost:8000/health
+- 🎨 **UI:** `http://localhost:5180` (or `http://localhost:5173`)
+- 🔧 **API:** `http://localhost:8010`
+- 💚 **Health Check:** `http://localhost:8010/health`
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## 🐳 Docker Deployment
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl + Z` | Undo (mute state / markers) |
-| `Ctrl + Y` / `Ctrl + Shift + Z` | Redo |
-
----
-
-## 🐳 Docker
-
-All containers are production-ready with multi-stage builds and health checks.
+Multi-stage production containers with built-in health checks:
 
 ```bash
-# NVIDIA GPU (default) — frontend on port 80, backend on port 8000
+# NVIDIA GPU (Default)
 docker-compose up --build
 
-# CPU only (no GPU required)
+# CPU Only (No GPU needed)
 docker-compose -f docker-compose.yml -f docker-compose.cpu.yml up --build
 
 # AMD ROCm (Linux)
 docker-compose -f docker-compose.yml -f docker-compose.rocm.yml up --build
 
-# Cloud-optimized (memory limits, logging, restart policies)
+# Cloud-Optimized
 docker-compose -f docker-compose.yml -f docker-compose.cloud.yml up --build
 ```
 
-| Container | Image | Port | Base |
-|-----------|-------|------|------|
-| Frontend | `unweave-frontend` | 80 | Nginx Alpine (multi-stage build) |
-| Backend (CUDA) | `unweave-backend:cuda` | 8000 | NVIDIA CUDA 12.1 + Python 3.11 |
-| Backend (CPU) | `unweave-backend:cpu` | 8000 | Python 3.11-slim |
-| Backend (ROCm) | `unweave-backend:rocm` | 8000 | ROCm 6.0 |
-
 ---
 
-## 📁 Project Structure
+## 📁 Repository Structure
 
 ```
 unweave/
-├── frontend/                  # React SPA
-│   ├── public/                # Static assets (logos, lame.min.js)
+├── frontend/                  # React SPA DAW Client
 │   ├── src/
-│   │   ├── components/        # UI (Mixer, Track, Uploader, MergeDialog)
-│   │   ├── utils/             # Audio utilities, IndexedDB helpers
-│   │   ├── types/             # TypeScript declarations
-│   │   ├── App.tsx            # Root component with session persistence
-│   │   ├── main.tsx           # React entry point
-│   │   └── types.ts           # Shared TypeScript interfaces
+│   │   ├── components/
+│   │   │   ├── timeline/      # Multi-track Timeline, Ruler, Playhead, MediaPool
+│   │   │   ├── mixer/         # Mixer Console, Channel Strips, 60fps VU Meters
+│   │   │   ├── separator/     # AI Stem Uploader, Song Buckets, Stem Cards
+│   │   │   ├── export/        # Export & Mixdown Hub, Format Selectors
+│   │   │   ├── navigation/    # Header & Tab Navigation Bar
+│   │   │   └── MergeDialog.tsx# Lossless Layer Merging Modal
+│   │   ├── context/           # TimelineContext, SongLibraryContext, ProcessingModeContext
+│   │   ├── services/          # Web Audio Engine, AnalyserNode, Playback Clocks
+│   │   └── utils/             # Lossless WAV PCM Encoder, Waveform Canvas Renderer
 │   ├── Dockerfile             # Multi-stage: Node build → Nginx serve
-│   ├── nginx.conf             # Nginx config with API reverse proxy
-│   └── .dockerignore
-├── backend/                   # FastAPI + AI Engine
-│   ├── main.py                # API server, GPU detection, job management
-│   ├── worker.py              # Subprocess worker for stem separation
-│   ├── Dockerfile             # NVIDIA CUDA 12.1 image
-│   ├── Dockerfile.cpu         # Lightweight CPU image
-│   ├── Dockerfile.rocm        # AMD ROCm image
-│   ├── requirements.txt
-│   └── .dockerignore
-├── scripts/                   # One-click installers
-│   ├── install.ps1            # Windows (PowerShell)
-│   ├── install.sh             # Linux (Bash)
-│   └── install-mac.sh         # macOS (Bash)
-├── docs/                      # Documentation
-│   └── cloud-guide.html       # Interactive cloud deployment guide (HTML)
-├── docker-compose.yml         # Default (NVIDIA GPU)
-├── docker-compose.cpu.yml     # CPU override
-├── docker-compose.rocm.yml    # AMD ROCm override
-├── docker-compose.cloud.yml   # Cloud optimization override
-├── .env.example               # Environment template
-├── .github/                   # CI/CD
-│   └── workflows/deploy.yml   # GitHub Actions deployment
-├── CONTRIBUTING.md            # Contribution guide
+│   └── nginx.conf             # Nginx reverse proxy configuration
+├── backend/                   # FastAPI Backend & AI Separation Worker
+│   ├── main.py                # Job queue, device detection, serial pipeline manager
+│   ├── worker.py              # Subprocess worker executing Demucs separation
+│   ├── requirements.txt       # PyTorch, Demucs, FastAPI dependencies
+│   ├── Dockerfile             # NVIDIA CUDA container image
+│   ├── Dockerfile.cpu         # Lightweight CPU container image
+│   └── Dockerfile.rocm        # AMD ROCm container image
+├── scripts/                   # Automated cross-platform install scripts
+├── docs/                      # Cloud deployment and architecture guides
+├── docker-compose.yml         # Default GPU Compose file
+├── .env.example               # Environment variable reference
+├── CONTRIBUTING.md            # Contribution guidelines
 └── LICENSE                    # MIT License
 ```
 
 ---
 
-## ☁️ Cloud Deployment
+## 🔧 Configuration Reference
 
-Deploy the backend as a GPU container and frontend as a static Nginx container:
-
-| Platform | Backend | Frontend | Guide |
-|----------|---------|----------|-------|
-| **Azure** | Container Instances (GPU) | Container Instances (Nginx) | [→ Interactive Guide](docs/cloud-guide.html) |
-| **GCP** | Cloud Run with GPU | Cloud Run (Nginx) | [→ Interactive Guide](docs/cloud-guide.html) |
-
-### GitHub CI/CD
-
-Push to `main` and let GitHub Actions build + deploy automatically — no local Docker rebuilds needed. See the [Cloud Guide](docs/cloud-guide.html#github-actions) for workflow YAML templates.
-
-See [Cloud Deployment Guide (HTML)](docs/cloud-guide.html) for full step-by-step instructions with copy-to-clipboard commands, cost estimates, and architecture diagrams.
-
----
-
-## 🔧 Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DEVICE_OVERRIDE` | *auto* | Force GPU: `cuda`, `mps`, `directml`, `cpu` |
-| `CLOUD_MODE` | `false` | Enable cloud optimizations |
-| `MAX_FILE_SIZE_MB` | `50` | Max upload size |
-| `CLEANUP_INTERVAL_SECONDS` | `3600` | Stem cleanup interval |
-| `WORKERS` | `1` | Uvicorn workers (keep 1 for GPU) |
-
----
-
-## 📖 Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Cloud Guide (Interactive)](docs/cloud-guide.html) | Azure, GCP, GitHub Actions — step-by-step |
-| [Contributing](CONTRIBUTING.md) | How to contribute |
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+| Environment Variable | Default | Description |
+|----------------------|---------|-------------|
+| `HOST` | `0.0.0.0` | API bind address |
+| `PORT` | `8010` | API port |
+| `DEVICE_OVERRIDE` | *auto* | Force device: `cuda`, `mps`, `directml`, `cpu` |
+| `VITE_API_URL` | `http://localhost:8010` | Frontend backend API URL |
+| `VITE_GPU_BACKEND_URL` | *empty* | Optional RunPod / Cloud GPU backend endpoint |
+| `CLOUD_MODE` | `false` | Enable aggressive cleanup & container memory limits |
+| `MAX_FILE_SIZE_MB` | `50` | Maximum upload file size |
+| `CLEANUP_INTERVAL_SECONDS`| `3600` | Stem temporary cache cleanup interval |
 
 ---
 
 ## 📄 License
 
 MIT License — see [LICENSE](LICENSE) for details.
+

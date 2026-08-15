@@ -106,7 +106,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                         ? Object.fromEntries(
                             Object.entries(data.stems).map(([k, v]) => [
                                 k,
-                                v.startsWith('/stems/') ? `/gpu-api${v}` : v,
+                                v && v.startsWith('/stems/') ? `/gpu-api${v}` : v,
                             ])
                           )
                         : data.stems;
@@ -121,6 +121,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                             const blobStems: Record<string, string> = {};
                             for (let i = 0; i < entries.length; i++) {
                                 const [stemName, stemUrl] = entries[i];
+                                if (!stemUrl) continue;
                                 setStatusMessage(`Downloading ${stemName}... (${i + 1}/${entries.length})`);
                                 const resp = await fetch(stemUrl);
                                 if (!resp.ok) throw new Error(`Failed to download ${stemName}`);

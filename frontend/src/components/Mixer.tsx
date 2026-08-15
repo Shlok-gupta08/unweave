@@ -4,7 +4,7 @@ import WaveSurfer from 'wavesurfer.js';
 import JSZip from 'jszip';
 import Track from './Track';
 import { MergeDialog } from './MergeDialog';
-import { mergeStemsToBuffer, audioBufferToMP3Blob } from '../utils/audioUtils';
+import { mergeStemsToBuffer, audioBufferToWavBlob } from '../utils/audioUtils';
 import type { Stems } from '../types';
 
 interface MixerProps {
@@ -450,8 +450,8 @@ export const Mixer: React.FC<MixerProps> = ({ stems, onAddStem, onRemoveStem }) 
             if (urls.length === 0) throw new Error("No valid tracks selected");
 
             const mixedBuffer = await mergeStemsToBuffer(urls);
-            const mp3Blob = audioBufferToMP3Blob(mixedBuffer);
-            const blobUrl = URL.createObjectURL(mp3Blob);
+            const wavBlob = audioBufferToWavBlob(mixedBuffer);
+            const blobUrl = URL.createObjectURL(wavBlob);
 
             const existingMergedCount = trackNames.filter(n => n.startsWith('Merged')).length;
             const newName = `Merged ${existingMergedCount + 1} (${selectedLayers.join(', ')})`;

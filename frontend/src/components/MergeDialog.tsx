@@ -1,15 +1,28 @@
 import React, { useState } from 'react';
-import { X, FileAudio, CheckSquare, Square, Loader2 } from 'lucide-react';
+import { X, CheckSquare, Square, Loader2, Sparkles } from 'lucide-react';
 
 interface MergeDialogProps {
     availableTracks: string[];
     onClose: () => void;
-    onMerge: (selectedTracks: string[]) => void;
+    onMerge: (selectedTracks: string[], customName?: string, targetSongId?: string) => void;
     isMerging: boolean;
+    title?: string;
+    availableSongBuckets?: Array<{ id: string; name: string }>;
+    defaultTargetSongId?: string;
 }
 
-export const MergeDialog: React.FC<MergeDialogProps> = ({ availableTracks, onClose, onMerge, isMerging }) => {
-    const [selected, setSelected] = useState<Set<string>>(new Set());
+export const MergeDialog: React.FC<MergeDialogProps> = ({
+    availableTracks,
+    onClose,
+    onMerge,
+    isMerging,
+    title = 'Merge & Combine Layers',
+    availableSongBuckets = [],
+    defaultTargetSongId,
+}) => {
+    const [selected, setSelected] = useState<Set<string>>(new Set(availableTracks.slice(0, 2)));
+    const [customName, setCustomName] = useState('');
+    const [targetSongId, setTargetSongId] = useState<string>(defaultTargetSongId || availableSongBuckets[0]?.id || '');
 
     const toggleTrack = (track: string) => {
         const next = new Set(selected);
@@ -23,87 +36,126 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({ availableTracks, onClo
 
     const handleConfirm = () => {
         if (selected.size > 0 && !isMerging) {
-            onMerge(Array.from(selected));
+            const name = customName.trim() || `Merged (${Array.from(selected).join(', ')})`;
+            onMerge(Array.from(selected), name, targetSongId || undefined);
         }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-            <div className="bg-zinc-900 border border-white/10 rounded-t-2xl sm:rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative max-h-[85vh] sm:max-h-none flex flex-col" onClick={e => e.stopPropagation()}>
-
+        <div
+            onClick={onClose}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
+        >
+            <div
+                className="bg-zinc-900/95 border border-white/15 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative flex flex-col animate-in zoom-in-95 duration-300"
+                onClick={e => e.stopPropagation()}
+            >
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/5 bg-white/[0.02] shrink-0">
+                <div className="flex items-center justify-between p-5 border-b border-white/10 bg-white/[0.02]">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-yellow-500/10 rounded-xl">
-                            <FileAudio className="w-5 h-5 text-yellow-500" />
+                        <div className="p-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl text-yellow-400">
+                            <Sparkles className="w-5 h-5" />
                         </div>
-                        <h3 className="text-xl font-bold text-white tracking-tight">Merge & Export Layers</h3>
+                        <div>
+                            <h3 className="text-base sm:text-lg font-black text-white tracking-tight">{title}</h3>
+                            <p className="text-xs text-zinc-400">Combine multiple stem layers into 1 new track</p>
+                        </div>
                     </div>
                     {!isMerging && (
-                        <button onClick={onClose} className="p-2.5 rounded-xl hover:bg-white/10 active:scale-95 text-zinc-400 hover:text-white transition-all">
-                            <X size={20} />
+                        <button
+                            onClick={onClose}
+                            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                        >
+                            <X size={18} />
                         </button>
                     )}
                 </div>
 
                 {/* Body */}
-                <div className="p-4 sm:p-6 overflow-y-auto flex-1">
-                    <p className="text-xs sm:text-sm text-zinc-400 mb-4 font-medium">
-                        Select the layers you want to combine into a single file. Your original tracks will stay safe and unchanged. Once processed, the new merged layer will be ready to download and automatically added to layers and will be ready to use.
-                    </p>
+                <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                    {/* Optional Name Input */}
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Merged Layer Name (Optional)</label>
+                        <input
+                            type="text"
+                            placeholder="e.g. Backing Track (Drums + Bass)"
+                            value={customName}
+                            onChange={(e) => setCustomName(e.target.value)}
+                            disabled={isMerging}
+                            className="w-full px-3.5 py-2 bg-white/5 border border-white/10 rounded-xl text-xs sm:text-sm font-medium text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-500/50"
+                        />
+                    </div>
 
-                    <div className="flex flex-col gap-2 max-h-48 sm:max-h-60 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
-                        {availableTracks.map(track => {
-                            const isSelected = selected.has(track);
-                            return (
-                                <button
-                                    key={track}
-                                    onClick={() => toggleTrack(track)}
-                                    disabled={isMerging}
-                                    className={`flex items-center gap-3 w-full p-3 sm:p-4 rounded-xl border transition-all text-left active:scale-[0.98] ${isSelected
-                                            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500'
-                                            : 'bg-white/5 border-white/5 text-zinc-300 hover:bg-white/10 hover:border-white/10'
-                                        } ${isMerging ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    {isSelected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5 opacity-50" />}
-                                    <span className="font-semibold">{track}</span>
-                                </button>
-                            );
-                        })}
+                    {/* Destination Song Bucket */}
+                    {availableSongBuckets.length > 0 && (
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Save to Song Bucket</label>
+                            <select
+                                value={targetSongId}
+                                onChange={(e) => setTargetSongId(e.target.value)}
+                                disabled={isMerging}
+                                className="w-full px-3.5 py-2 bg-zinc-950 border border-white/10 rounded-xl text-xs sm:text-sm font-medium text-white focus:outline-none focus:border-yellow-500/50 cursor-pointer"
+                            >
+                                {availableSongBuckets.map(bucket => (
+                                    <option key={bucket.id} value={bucket.id} className="bg-zinc-900 text-white">
+                                        {bucket.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Select Layers to Merge</label>
+                        <div className="space-y-2">
+                            {availableTracks.map(track => {
+                                const isSelected = selected.has(track);
+                                return (
+                                    <button
+                                        key={track}
+                                        onClick={() => toggleTrack(track)}
+                                        disabled={isMerging}
+                                        className={`flex items-center justify-between w-full p-3 rounded-xl border transition-all text-left ${
+                                            isSelected
+                                                ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400 font-bold'
+                                                : 'bg-white/5 border-white/5 text-zinc-300 hover:bg-white/10'
+                                        } ${isMerging ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                    >
+                                        <div className="flex items-center gap-2.5">
+                                            {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 opacity-40" />}
+                                            <span className="text-xs sm:text-sm">{track}</span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 sm:p-6 sm:pt-2 flex items-center justify-end gap-3 bg-white/[0.02] border-t border-white/5 shrink-0 pb-safe">
+                <div className="p-4 sm:p-5 flex items-center justify-end gap-3 bg-white/[0.02] border-t border-white/10">
                     <button
                         onClick={onClose}
                         disabled={isMerging}
-                        className="px-4 sm:px-5 py-2.5 rounded-xl font-semibold text-sm text-zinc-400 hover:text-white hover:bg-white/5 active:scale-95 transition-all disabled:opacity-50"
+                        className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleConfirm}
                         disabled={selected.size === 0 || isMerging}
-                        className="flex items-center gap-2 px-5 sm:px-6 py-2.5 rounded-xl font-bold text-sm bg-yellow-500 text-black hover:bg-yellow-400 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(250,204,21,0.3)]"
+                        className="flex items-center gap-2 px-5 py-2 rounded-xl font-black text-xs sm:text-sm bg-yellow-500 text-black hover:bg-yellow-400 active:scale-95 transition-all disabled:opacity-50 shadow-[0_0_15px_rgba(250,204,21,0.3)] cursor-pointer"
                     >
                         {isMerging ? (
                             <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                Processing...
+                                <span>Merging Audio...</span>
                             </>
                         ) : (
-                            'Merge & Export Layers'
+                            <span>Merge ({selected.size} Layers)</span>
                         )}
                     </button>
                 </div>
-
-                {/* Progress Overlay */}
-                {isMerging && (
-                    <div className="absolute inset-x-0 bottom-0 h-1 bg-white/10">
-                        <div className="h-full bg-yellow-500 w-1/2 rounded-r-full shadow-[0_0_10px_rgba(250,204,21,0.5)] animate-[slide_1.5s_ease-in-out_infinite]" />
-                    </div>
-                )}
             </div>
         </div>
     );

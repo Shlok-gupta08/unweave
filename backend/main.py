@@ -191,8 +191,11 @@ app.mount("/stems", StaticFiles(directory=OUTPUT_DIR), name="stems")
 # ============================================================
 # Job Progress Tracking
 # ============================================================
+import queue
+import gc
+
 # Stores progress for active jobs:
-# { job_id: { "status": "uploading|processing|complete|error|cancelled",
+# { job_id: { "status": "queued|uploading|processing|complete|error|cancelled",
 #             "progress": 0-100, "eta_seconds": float,
 #             "message": str, "stems": dict, "started_at": float,
 #             "processing_time": float, "device_used": str } }
@@ -202,6 +205,14 @@ jobs_lock = threading.Lock()
 # Track active subprocesses so they can be securely terminated on cancel
 active_processes: dict = {}
 processes_lock = threading.Lock()
+
+# ============================================================
+# Sequential Job Execution Queue (Single-Worker Concurrency)
+# Prevents RAM/Swap thrashing by processing 1 song at a time
+# ============================================================
+separation_queue: queue.Queue = queue.Queue()
+queue_lock = threading.Lock()
+active_running_job_id: str | None = None
 
 
 def update_job(job_id: str, **kwargs):
@@ -213,6 +224,64 @@ def update_job(job_id: str, **kwargs):
 def get_job(job_id: str) -> dict | None:
     with jobs_lock:
         return jobs.get(job_id, {}).copy() if job_id in jobs else None
+
+
+def update_queue_positions():
+    """Updates messages for all queued jobs with their updated position in line."""
+    with jobs_lock:
+        queued_jobs = [
+            (jid, j) for jid, j in jobs.items() if j.get("status") == "queued"
+        ]
+        # Sort by started_at timestamp
+        queued_jobs.sort(key=lambda x: x[1].get("started_at", 0))
+
+        for idx, (jid, j) in enumerate(queued_jobs, start=1):
+            pos_text = "1st" if idx == 1 else "2nd" if idx == 2 else "3rd" if idx == 3 else f"{idx}th"
+            msg = f"In Queue ({pos_text} in line) — Waiting for active song to finish..."
+            j["message"] = msg
+            j["progress"] = 0
+            j["eta_seconds"] = None
+
+
+def separation_queue_worker():
+    """Single persistent background worker pulling jobs 1-by-1 sequentially."""
+    global active_running_job_id
+    log.info("🧵 Sequential separation queue worker initialized (Single Worker Concurrency)")
+    while True:
+        try:
+            job_item = separation_queue.get()
+            job_id, input_path, job_out_dir, job_temp_dir = job_item
+
+            # Check if this job was cancelled while waiting in queue
+            job = get_job(job_id)
+            if not job or job.get("status") == "cancelled":
+                cleanup_files(job_temp_dir)
+                cleanup_files(job_out_dir)
+                separation_queue.task_done()
+                update_queue_positions()
+                continue
+
+            with queue_lock:
+                active_running_job_id = job_id
+
+            update_queue_positions()
+
+            # Execute single separation
+            run_separation(job_id, input_path, job_out_dir, job_temp_dir)
+
+        except Exception as e:
+            log.exception(f"Queue worker encountered error: {e}")
+        finally:
+            with queue_lock:
+                active_running_job_id = None
+            release_gpu_memory()
+            gc.collect()
+            separation_queue.task_done()
+            update_queue_positions()
+
+
+# Start persistent single-worker queue thread
+threading.Thread(target=separation_queue_worker, daemon=True).start()
 
 
 # ============================================================
@@ -502,7 +571,7 @@ async def health():
 
 @app.post("/separate/")
 async def separate_audio(file: UploadFile = File(...)):
-    """Upload audio and start async separation. Returns job_id for status polling."""
+    """Upload audio and enqueue separation. Returns job_id for status polling."""
 
     if not file.filename:
         return JSONResponse({"error": "No file uploaded"}, status_code=400)
@@ -527,32 +596,42 @@ async def separate_audio(file: UploadFile = File(...)):
     with open(input_path, "wb") as buffer:
         buffer.write(contents)
 
+    # Check if another job is currently active/processing
+    with queue_lock:
+        is_busy = (active_running_job_id is not None) or (separation_queue.qsize() > 0)
+        current_queue_size = separation_queue.qsize() + (1 if active_running_job_id is not None else 0)
+
+    if is_busy:
+        position = current_queue_size + 1
+        pos_text = "1st" if position == 1 else "2nd" if position == 2 else "3rd" if position == 3 else f"{position}th"
+        initial_status = "queued"
+        initial_message = f"In Queue ({pos_text} in line) — Waiting for active song to finish..."
+        log.info(f"⏳ Job {job_id} queued at position #{position} for {file.filename}")
+    else:
+        initial_status = "processing"
+        initial_message = "Initializing separation worker..."
+        log.info(f"🎵 Starting separation: {file.filename} ({file_size_mb:.1f} MB) on {DEVICE_TYPE.upper()}")
+
     # Initialize job tracking
     with jobs_lock:
         jobs[job_id] = {
-            "status": "uploading",
+            "status": initial_status,
             "progress": 0,
             "eta_seconds": None,
-            "message": "Upload received, starting separation...",
+            "message": initial_message,
             "stems": None,
             "started_at": time.time(),
             "processing_time": None,
             "device_used": DEVICE_TYPE,
         }
 
-    # Start separation in a background thread
-    log.info(f"🎵 Starting separation: {file.filename} ({file_size_mb:.1f} MB) on {DEVICE_TYPE.upper()}")
-    thread = threading.Thread(
-        target=run_separation,
-        args=(job_id, input_path, job_out_dir, job_temp_dir),
-        daemon=True,
-    )
-    thread.start()
+    # Add to single-worker sequential execution queue
+    separation_queue.put((job_id, input_path, job_out_dir, job_temp_dir))
 
     return {
         "job_id": job_id,
-        "message": "Separation started",
-        "status": "processing",
+        "message": "Queued for separation" if is_busy else "Separation started",
+        "status": initial_status,
     }
 
 
@@ -581,17 +660,17 @@ async def list_jobs():
 
 @app.post("/cancel/{job_id}")
 async def cancel_job(job_id: str):
-    """Instantly terminate a running separation job process by ID."""
+    """Instantly terminate or dequeue a separation job process by ID."""
     job = get_job(job_id)
     if not job:
         return JSONResponse({"error": "Job not found"}, status_code=404)
         
-    if job.get("status") not in ("uploading", "processing"):
+    if job.get("status") not in ("queued", "uploading", "processing"):
         return JSONResponse({"error": "Job is not active"}, status_code=400)
     
     log.info(f"🛑 Cancelling job {job_id}")
     
-    # Mark as cancelled immediately so the frontend knows
+    # Mark as cancelled immediately so the worker/frontend knows
     update_job(job_id, status="cancelled", message="Job cancelled by user")
     
     with processes_lock:
@@ -599,20 +678,20 @@ async def cancel_job(job_id: str):
         if process:
             log.info(f"🔪 Terminating subprocess for {job_id}")
             process.terminate()
-            # On windows process.kill() or taskkill might be needed for forceful abort,
-            # but terminate() usually suffices since it's just a PyTorch script.
             try:
                 process.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 process.kill()
             del active_processes[job_id]
             
-    # Clean up files manually since the thread probably died immediately
+    # Clean up files manually
     job_temp_dir = os.path.join(TEMP_DIR, job_id)
     job_out_dir = os.path.join(OUTPUT_DIR, job_id)
     cleanup_files(job_temp_dir)
     cleanup_files(job_out_dir)
     release_gpu_memory()
+    gc.collect()
+    update_queue_positions()
     
     return {"message": "Job cancelled"}
 
