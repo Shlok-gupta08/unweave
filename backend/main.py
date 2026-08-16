@@ -182,17 +182,9 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5180",
-        "http://127.0.0.1:5180",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "https://unweave-frontend.agreeabledune-38f80bfd.centralindia.azurecontainerapps.io",
-        "https://unweave.sg-projects.me"
-    ],
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://.*\.vercel\.app|https://.*\.azurecontainerapps\.io|https://unweave\.sg-projects\.me",
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_origin_regex=r".*",
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -215,6 +207,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
 
 app.mount("/stems", StaticFiles(directory=OUTPUT_DIR), name="stems")
+app.mount("/api/stems", StaticFiles(directory=OUTPUT_DIR), name="api_stems")
 
 # ============================================================
 # Job Progress Tracking

@@ -65,6 +65,10 @@ export function ProcessingModeProvider({ children }: { children: ReactNode }) {
 
     // Fetch primary backend health/hardware info
     useEffect(() => {
+        let isMounted = true;
+        let retryCount = 0;
+        const maxRetries = 8;
+
         const fetchPrimaryHealth = async () => {
             try {
                 const base = getBaseUrl();
@@ -72,21 +76,27 @@ export function ProcessingModeProvider({ children }: { children: ReactNode }) {
                     device_type: string;
                     device_name: string;
                     gpu_available: boolean;
-                }>(`${base}/api/health`);
+                }>(`${base}/api/health`, { timeout: 2500 });
                 
-                if (res.data) {
+                if (res.data && isMounted) {
                     setPrimaryDeviceType(res.data.device_type || 'cpu');
                     setPrimaryDeviceName(res.data.device_name || 'CPU');
                     setPrimaryGpuAvailable(!!res.data.gpu_available);
+                    setPrimaryHealthChecked(true);
                 }
             } catch (err) {
-                console.error('Failed to fetch primary backend health/hardware info:', err);
-            } finally {
-                setPrimaryHealthChecked(true);
+                if (retryCount < maxRetries && isMounted) {
+                    retryCount++;
+                    setTimeout(fetchPrimaryHealth, 1000);
+                } else if (isMounted) {
+                    console.warn('Primary backend health check reached max retries:', err);
+                    setPrimaryHealthChecked(true);
+                }
             }
         };
 
         fetchPrimaryHealth();
+        return () => { isMounted = false; };
     }, []);
 
     // Health-check the GPU backend

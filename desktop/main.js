@@ -97,6 +97,16 @@ async function startBackendSupervisor() {
       console.log(`[Unweave Desktop] Backend process exited with code ${code} signal ${signal}`);
       backendProcess = null;
     });
+
+    // Wait up to 8 seconds for backend to be fully online and responsive
+    for (let i = 0; i < 16; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      const ok = await checkBackendHealth();
+      if (ok) {
+        console.log('[Unweave Desktop] AI Backend is online and ready.');
+        break;
+      }
+    }
   } catch (err) {
     console.warn('[Unweave Desktop] Could not start local Python backend:', err.message);
   }
