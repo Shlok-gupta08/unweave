@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Layers, SlidersHorizontal, Download } from 'lucide-react';
+import { Sparkles, Layers, SlidersHorizontal, Download, Compass } from 'lucide-react';
 import type { WorkspaceTab } from '../../types';
 import { useSongLibrary } from '../../context/SongLibraryContext';
 import { useTimeline } from '../../context/TimelineContext';
@@ -36,8 +36,14 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onTabChan
             badge: project.tracks.length > 0 ? `${project.tracks.length} tracks` : undefined,
         },
         {
+            id: 'spatial',
+            label: '8D Spatial',
+            icon: <Compass className="w-4 h-4 sm:w-5 sm:h-5" />,
+            badge: project.tracks.length > 0 ? '360°' : undefined,
+        },
+        {
             id: 'export',
-            label: 'Deliver / Export',
+            label: 'Export',
             icon: <Download className="w-4 h-4 sm:w-5 sm:h-5" />,
         },
     ];

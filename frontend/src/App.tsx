@@ -1,18 +1,26 @@
 import { useState, useEffect, useRef } from 'react';
 import { Github, AlertTriangle, RefreshCw, Zap, X } from 'lucide-react';
 import { ProcessingModeProvider, useProcessingMode } from './context/ProcessingModeContext';
-import { SongLibraryProvider } from './context/SongLibraryContext';
-import { TimelineProvider } from './context/TimelineContext';
+import { SongLibraryProvider, useSongLibrary } from './context/SongLibraryContext';
+import { TimelineProvider, useTimeline } from './context/TimelineContext';
 import { BottomTabBar } from './components/navigation/BottomTabBar';
 import { SeparatorWorkspace } from './components/separator/SeparatorWorkspace';
 import { TimelineWorkspace } from './components/timeline/TimelineWorkspace';
 import { MixerConsoleWorkspace } from './components/mixer/MixerConsoleWorkspace';
+import { Spatial8DMixerWorkspace } from './components/spatial/Spatial8DMixerWorkspace';
 import { ExportWorkspace } from './components/export/ExportWorkspace';
-import type { WorkspaceTab } from './types';
+import { ProjectRecoveryModal } from './components/modals/ProjectRecoveryModal';
+import { ProjectManagerModal } from './components/modals/ProjectManagerModal';
+import { projectStorage } from './services/projectStorage';
+import type { WorkspaceTab, AutoSaveInfo } from './types';
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('separate');
   const [showGpuUnavailableModal, setShowGpuUnavailableModal] = useState(false);
+  const [recoveryInfo, setRecoveryInfo] = useState<AutoSaveInfo | null>(null);
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [isGlobalProjectModalOpen, setIsGlobalProjectModalOpen] = useState(false);
+  const [globalProjectModalMode, setGlobalProjectModalMode] = useState<'manage' | 'save-as' | 'open'>('manage');
 
   const {
     processingMode,
@@ -24,9 +32,70 @@ function AppContent() {
     primaryHealthChecked,
   } = useProcessingMode();
 
+  const { restoreSongsState } = useSongLibrary();
+  const { restoreProjectState, clearTimeline } = useTimeline();
+
   const [isScrolled, setIsScrolled] = useState(false);
   const scrollRafRef = useRef(false);
+  const hasCheckedAutoSaveRef = useRef(false);
   const isDesktop = typeof window !== 'undefined' && Boolean(window.electronAPI?.isDesktop);
+
+  // Check for auto-saved project session strictly ONCE on initial cold start
+  useEffect(() => {
+    if (hasCheckedAutoSaveRef.current) return;
+    hasCheckedAutoSaveRef.current = true;
+
+    async function checkColdStartAutoSave() {
+      try {
+        const info = await projectStorage.getAutoSaveInfo();
+        if (info.exists && info.meta) {
+          if ((info.meta.songCount ?? 0) > 0 || info.meta.trackCount > 0 || info.meta.stemCount > 0) {
+            setRecoveryInfo(info);
+            setShowRecoveryModal(true);
+          }
+        }
+      } catch (err) {
+        console.warn('AutoSave check failed', err);
+      }
+    }
+    checkColdStartAutoSave();
+  }, []);
+
+  const handleRestoreSession = async () => {
+    try {
+      const session = await projectStorage.loadAutoSaveSession();
+      if (session) {
+        if (session.songs && session.songs.length > 0) {
+          await restoreSongsState(session.songs);
+        }
+        if (session.timelineProject) {
+          await restoreProjectState(session.timelineProject);
+          if (session.timelineProject.tracks.length > 0) {
+            setActiveTab('editor');
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to restore autosaved session', err);
+    } finally {
+      setShowRecoveryModal(false);
+      setRecoveryInfo(null);
+    }
+  };
+
+  const handleDiscardSession = async () => {
+    try {
+      await projectStorage.clearAutoSaveSession();
+      await projectStorage.resetAllAppState();
+      restoreSongsState([]);
+      clearTimeline();
+    } catch (err) {
+      console.warn('Failed to clear autosaved session', err);
+    } finally {
+      setShowRecoveryModal(false);
+      setRecoveryInfo(null);
+    }
+  };
 
   // Track scroll position
   useEffect(() => {
@@ -59,6 +128,15 @@ function AppContent() {
           }, 80);
         } else if (action === 'export-mixdown' || action === 'export-all-stems') {
           setActiveTab('export');
+        } else if (action === 'new-project') {
+          setGlobalProjectModalMode('manage');
+          setIsGlobalProjectModalOpen(true);
+        } else if (action === 'save-project-as') {
+          setGlobalProjectModalMode('save-as');
+          setIsGlobalProjectModalOpen(true);
+        } else if (action === 'open-project-manager') {
+          setGlobalProjectModalMode('manage');
+          setIsGlobalProjectModalOpen(true);
         }
       });
       return unsubscribe;
@@ -108,22 +186,25 @@ function AppContent() {
           )}
 
           {/* Right Header: Processing Mode & GitHub Link */}
-          <div className="flex items-center gap-2.5">
+          <div
+            className="flex items-center gap-2.5"
+            style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
+          >
             <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 text-xs">
               <button
                 onClick={() => setProcessingMode('cpu')}
-                className={`px-2 py-0.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   processingMode === 'cpu' ? 'bg-white/15 text-white shadow' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
-                Standard (Local)
+                {primaryGpuAvailable ? 'Local (GPU)' : 'Local (Standard)'}
               </button>
               <button
                 onClick={handleTurboGpuClick}
-                className="px-2 py-0.5 rounded-lg text-xs font-semibold text-zinc-500 hover:text-yellow-400 transition-all cursor-pointer flex items-center gap-1"
+                className="px-2.5 py-0.5 rounded-lg text-xs font-semibold text-zinc-500 hover:text-yellow-400 transition-all cursor-pointer flex items-center gap-1"
               >
                 <Zap className="w-2.5 h-2.5" />
-                <span>Turbo GPU</span>
+                <span>Turbo Cloud</span>
               </button>
             </div>
 
@@ -150,7 +231,7 @@ function AppContent() {
           <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <AlertTriangle size={14} className="text-red-400 shrink-0" />
-              <span className="text-red-200 font-medium">GPU backend offline. Switch to Standard (CPU) for separation.</span>
+              <span className="text-red-200 font-medium">Turbo Cloud GPU offline. Switch to Local Engine for separation.</span>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -163,7 +244,7 @@ function AppContent() {
                 onClick={() => setProcessingMode('cpu')}
                 className="px-2 py-0.5 rounded-lg bg-white/10 text-white hover:bg-white/20 text-[11px] font-semibold"
               >
-                Use Standard (CPU)
+                Use Local Engine
               </button>
             </div>
           </div>
@@ -200,6 +281,10 @@ function AppContent() {
 
         {activeTab === 'mixer' && (
           <MixerConsoleWorkspace />
+        )}
+
+        {activeTab === 'spatial' && (
+          <Spatial8DMixerWorkspace />
         )}
 
         {activeTab === 'export' && (
@@ -255,6 +340,22 @@ function AppContent() {
           </div>
         </div>
       )}
+
+      {/* Project Auto-Save Startup Recovery Modal */}
+      {showRecoveryModal && recoveryInfo && (
+        <ProjectRecoveryModal
+          info={recoveryInfo}
+          onRestore={handleRestoreSession}
+          onDiscard={handleDiscardSession}
+        />
+      )}
+
+      {/* Global Project Manager Modal */}
+      <ProjectManagerModal
+        isOpen={isGlobalProjectModalOpen}
+        onClose={() => setIsGlobalProjectModalOpen(false)}
+        initialMode={globalProjectModalMode}
+      />
     </div>
   );
 }

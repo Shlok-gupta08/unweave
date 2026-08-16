@@ -2,10 +2,11 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
     UploadCloud, Layers, Download, Play, Pause,
-    CheckCircle2, Disc, Loader2
+    CheckCircle2, Disc, Loader2, RotateCcw, Sparkles, AlertCircle, Clock, Zap, Award
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { useSongLibrary } from '../../context/SongLibraryContext';
+import { useProcessingMode, type SeparationPasses } from '../../context/ProcessingModeContext';
 import { useTimeline } from '../../context/TimelineContext';
 import { SongBucketList } from './SongBucketList';
 import { getOrComputePeaks, drawWaveformToCanvas } from '../../utils/waveform';
@@ -24,15 +25,46 @@ const STEM_COLORS: Record<string, string> = {
     Other: '#64748b',
 };
 
+const PASS_OPTIONS: Array<{
+    count: SeparationPasses;
+    name: 'Good' | 'Better' | 'Best';
+    quality: string;
+    timing: string;
+    badge: string;
+}> = [
+    {
+        count: 2,
+        name: 'Good',
+        quality: 'Standard studio separation with clean stem isolation and balanced fidelity.',
+        timing: 'Standard baseline processing time (Fastest)',
+        badge: 'Recommended',
+    },
+    {
+        count: 3,
+        name: 'Better',
+        quality: 'Enhanced multi-shift averaging, sharper frequency definition, and reduced vocal bleed.',
+        timing: '~50% more processing time than Good',
+        badge: 'High Detail',
+    },
+    {
+        count: 4,
+        name: 'Best',
+        quality: 'Maximum deep-learning shift averaging with pristine vocal clarity and zero phase artifacts.',
+        timing: '~100% more processing time than Good (2x duration)',
+        badge: 'Studio Master',
+    },
+];
+
 export const SeparatorWorkspace: React.FC<SeparatorWorkspaceProps> = ({ onNavigateToEditor }) => {
     const {
         activeSong,
         selectSong,
         addSongs,
-        processSong,
+        reprocessSong,
         cancelProcessing,
     } = useSongLibrary();
 
+    const { separationPasses, setSeparationPasses } = useProcessingMode();
     const { loadSongStemsToTimeline, addClip, addTrack, project } = useTimeline();
 
     // Audio Preview State
@@ -118,6 +150,11 @@ export const SeparatorWorkspace: React.FC<SeparatorWorkspaceProps> = ({ onNaviga
         },
         multiple: true,
     });
+
+    const handleSeparateActiveSong = () => {
+        if (!activeSong) return;
+        reprocessSong(activeSong.id, undefined, separationPasses);
+    };
 
     const handleStemPreview = (stemName: string, url?: string) => {
         if (!url) return;
@@ -256,8 +293,11 @@ export const SeparatorWorkspace: React.FC<SeparatorWorkspaceProps> = ({ onNaviga
         }
     };
 
+    const currentPassConfig = PASS_OPTIONS.find(p => p.count === separationPasses) || PASS_OPTIONS[0];
+
     return (
         <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-10 space-y-8 animate-in fade-in duration-500">
+
             {/* Top Batch Dropzone Banner */}
             <div
                 {...getRootProps()}
@@ -310,48 +350,18 @@ export const SeparatorWorkspace: React.FC<SeparatorWorkspaceProps> = ({ onNaviga
                                 Drop audio files above or pick a song from the bucket on the left to isolate and view its stems.
                             </p>
                         </div>
-                    ) : activeSong.status === 'queued' ? (
-                        /* In-Queue Waiting View */
-                        <div className="flex flex-col items-center justify-center p-8 sm:p-16 bg-zinc-950/80 border border-amber-500/30 rounded-3xl backdrop-blur-2xl shadow-2xl relative overflow-hidden text-center">
-                            <div className="absolute inset-0 bg-amber-500/5 blur-3xl pointer-events-none" />
-
-                            <div className="p-4 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-4 animate-pulse">
-                                <Disc className="w-12 h-12 stroke-1 animate-spin" style={{ animationDuration: '4s' }} />
-                            </div>
-
-                            <span className="px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold uppercase tracking-wider mb-2">
-                                Queued for Processing
-                            </span>
-
-                            <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight mb-2">
-                                {activeSong.statusMessage || 'Waiting in line...'}
-                            </h3>
-                            <p className="text-xs sm:text-sm text-zinc-400 font-medium mb-6 truncate max-w-md">
-                                {activeSong.name}
-                            </p>
-                            <p className="text-xs text-zinc-500 max-w-sm mb-6">
-                                Songs are processed sequentially to protect your system's RAM and GPU from memory thrashing. This song will begin automatically as soon as the current track completes.
-                            </p>
-
-                            <button
-                                onClick={() => cancelProcessing(activeSong.id)}
-                                className="px-6 py-2.5 rounded-full border border-red-500/40 text-red-400 hover:bg-red-500/10 active:scale-95 text-xs font-bold transition-all cursor-pointer"
-                            >
-                                Cancel / Remove from Queue
-                            </button>
-                        </div>
                     ) : activeSong.status === 'processing' || activeSong.status === 'uploading' ? (
                         /* Processing View */
                         <div className="flex flex-col items-center justify-center p-8 sm:p-16 bg-zinc-950/80 border border-yellow-500/20 rounded-3xl backdrop-blur-2xl shadow-2xl relative overflow-hidden">
                             <div className="absolute inset-0 bg-yellow-500/5 blur-3xl pointer-events-none" />
 
                             <div className="relative mb-6">
-                                <svg className="w-28 h-28 sm:w-32 sm:h-32 -rotate-90" viewBox="0 0 100 100">
-                                    <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
+                                <svg className="w-36 h-36 sm:w-40 sm:h-40 -rotate-90" viewBox="0 0 100 100">
+                                    <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="5" />
                                     <circle
                                         cx="50" cy="50" r="42" fill="none"
                                         stroke="url(#sepProgressGradient)"
-                                        strokeWidth="6"
+                                        strokeWidth="5"
                                         strokeLinecap="round"
                                         strokeDasharray={`${2 * Math.PI * 42}`}
                                         strokeDashoffset={`${2 * Math.PI * 42 * (1 - activeSong.progress / 100)}`}
@@ -364,9 +374,13 @@ export const SeparatorWorkspace: React.FC<SeparatorWorkspaceProps> = ({ onNaviga
                                         </linearGradient>
                                     </defs>
                                 </svg>
-                                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                    <span className="text-3xl font-black text-white tabular-nums">{activeSong.progress}%</span>
-                                    <span className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider">Pass {activeSong.passNumber}/2</span>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center">
+                                    <span className="text-3xl sm:text-4xl font-black text-white tabular-nums tracking-tight">
+                                        {activeSong.progress}%
+                                    </span>
+                                    <span className="mt-1 px-2.5 py-0.5 rounded-md bg-yellow-400/10 border border-yellow-400/20 text-[10px] sm:text-[11px] font-black text-yellow-400 tracking-wide uppercase">
+                                        {currentPassConfig.name} Quality
+                                    </span>
                                 </div>
                             </div>
 
@@ -379,7 +393,7 @@ export const SeparatorWorkspace: React.FC<SeparatorWorkspaceProps> = ({ onNaviga
 
                             <button
                                 onClick={() => cancelProcessing(activeSong.id)}
-                                className="px-6 py-2.5 rounded-full border border-red-500/40 text-red-400 hover:bg-red-500/10 active:scale-95 text-xs font-bold transition-all"
+                                className="px-6 py-2.5 rounded-full border border-red-500/40 text-red-400 hover:bg-red-500/10 active:scale-95 text-xs font-bold transition-all cursor-pointer"
                             >
                                 Cancel Separation
                             </button>
@@ -402,6 +416,16 @@ export const SeparatorWorkspace: React.FC<SeparatorWorkspaceProps> = ({ onNaviga
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+                                    {/* Re-separate Button in Right Box */}
+                                    <button
+                                        onClick={handleSeparateActiveSong}
+                                        title={`Re-separate this song (${currentPassConfig.name} Quality)`}
+                                        className="px-3.5 py-2.5 rounded-xl border border-white/10 hover:border-yellow-500/40 hover:bg-white/5 active:scale-95 text-xs font-bold text-zinc-300 hover:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                    >
+                                        <RotateCcw className="w-3.5 h-3.5 text-yellow-400" />
+                                        <span>Re-separate</span>
+                                    </button>
+
                                     <button
                                         onClick={() => handleDownloadAllStemsZip(activeSong)}
                                         disabled={isZipping}
@@ -424,7 +448,7 @@ export const SeparatorWorkspace: React.FC<SeparatorWorkspaceProps> = ({ onNaviga
                                         ) : (
                                             <>
                                                 <Layers className="w-4 h-4" />
-                                                <span>Open in Timeline Editor</span>
+                                                <span>Open in Timeline</span>
                                             </>
                                         )}
                                     </button>
@@ -537,17 +561,99 @@ export const SeparatorWorkspace: React.FC<SeparatorWorkspaceProps> = ({ onNaviga
                             </div>
                         </div>
                     ) : (
-                        /* Queued or Error State */
-                        <div className="p-8 bg-zinc-950/60 border border-white/10 rounded-3xl text-center backdrop-blur-xl">
-                            <h3 className="text-lg font-bold text-white mb-2">{activeSong.name}</h3>
-                            <p className="text-xs text-zinc-400 mb-6">
-                                {activeSong.status === 'error' ? (activeSong.errorMessage || 'Separation failed') : 'This song is queued for separation.'}
-                            </p>
+                        /* Initial / Queued / Error / Idle Setup & Separate View */
+                        <div className="p-6 sm:p-10 bg-zinc-950/80 border border-white/10 rounded-3xl backdrop-blur-2xl shadow-2xl flex flex-col items-center text-center space-y-6">
+                            <div className={`p-4 rounded-3xl border ${
+                                activeSong.status === 'error'
+                                    ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                                    : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
+                            }`}>
+                                {activeSong.status === 'error' ? (
+                                    <AlertCircle className="w-10 h-10" />
+                                ) : (
+                                    <Disc className="w-10 h-10 stroke-1" />
+                                )}
+                            </div>
+
+                            <div>
+                                <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                                    {activeSong.name}
+                                </h3>
+                                <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+                                    {activeSong.status === 'error'
+                                        ? (activeSong.errorMessage || 'Separation failed. You can retry with a different pass count below.')
+                                        : 'Ready to separate into 6 isolated layers (Vocals, Drums, Bass, Guitar, Piano, Other)'}
+                                </p>
+                            </div>
+
+                            {/* Demucs Quality Selector: Good | Better | Best */}
+                            <div className="w-full max-w-lg bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-left space-y-3.5 shadow-inner">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Award className="w-4 h-4 text-yellow-400" />
+                                        <span className="text-xs font-black uppercase tracking-wider text-zinc-200">
+                                            Separation Quality
+                                        </span>
+                                    </div>
+                                    <span className="text-[11px] font-black text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2.5 py-0.5 rounded-full">
+                                        {currentPassConfig.name} Quality
+                                    </span>
+                                </div>
+
+                                {/* 3-Way Good / Better / Best Segmented Selector */}
+                                <div className="grid grid-cols-3 gap-2 bg-black/60 p-1.5 rounded-xl border border-white/10">
+                                    {PASS_OPTIONS.map((opt) => {
+                                        const isSelected = separationPasses === opt.count;
+                                        return (
+                                            <button
+                                                key={opt.count}
+                                                type="button"
+                                                onClick={() => setSeparationPasses(opt.count)}
+                                                className={`py-2 px-2 rounded-lg text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                                                    isSelected
+                                                        ? 'bg-yellow-500 text-black shadow-md font-black'
+                                                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                                                }`}
+                                            >
+                                                <span className="text-xs font-black tracking-tight">{opt.name}</span>
+                                                <span className={`text-[10px] font-medium ${isSelected ? 'text-black/80' : 'text-zinc-500'}`}>
+                                                    {opt.badge}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Detailed Audio Quality & Timing Description */}
+                                <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-2 text-xs">
+                                    <div className="flex items-start gap-2">
+                                        <Zap className="w-3.5 h-3.5 text-yellow-400 shrink-0 mt-0.5" />
+                                        <div>
+                                            <span className="font-bold text-zinc-300">Audio Quality: </span>
+                                            <span className="text-zinc-400">{currentPassConfig.quality}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <Clock className="w-3.5 h-3.5 text-yellow-400 shrink-0 mt-0.5" />
+                                        <div>
+                                            <span className="font-bold text-zinc-300">Processing Time: </span>
+                                            <span className="text-zinc-400">{currentPassConfig.timing}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Main Separate Action Button */}
                             <button
-                                onClick={() => processSong(activeSong.id)}
-                                className="px-6 py-2.5 rounded-xl bg-yellow-500 text-black hover:bg-yellow-400 active:scale-95 text-xs font-bold transition-all shadow-[0_0_20px_rgba(250,204,21,0.3)] cursor-pointer"
+                                onClick={handleSeparateActiveSong}
+                                className="px-10 py-3.5 rounded-2xl bg-yellow-500 text-black hover:bg-yellow-400 active:scale-95 text-sm sm:text-base font-black transition-all shadow-[0_0_30px_rgba(250,204,21,0.4)] hover:shadow-[0_0_40px_rgba(250,204,21,0.6)] flex items-center gap-2.5 cursor-pointer"
                             >
-                                {activeSong.status === 'error' ? 'Retry Separation' : 'Start Separation'}
+                                <Sparkles className="w-5 h-5 fill-current" />
+                                <span>
+                                    {activeSong.status === 'error'
+                                        ? 'Retry Separation'
+                                        : `Separate Stems (${currentPassConfig.name} Quality)`}
+                                </span>
                             </button>
                         </div>
                     )}

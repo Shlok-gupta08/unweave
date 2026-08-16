@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, ChevronDown, ChevronRight, GripVertical, Disc, Loader2, FolderInput, Copy, Trash2, X, ArrowRight } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, ChevronLeft, GripVertical, Disc, Loader2, FolderInput, Copy, Trash2, X, ArrowRight } from 'lucide-react';
 import { useSongLibrary } from '../../context/SongLibraryContext';
 import { useTimeline } from '../../context/TimelineContext';
 
@@ -19,7 +19,11 @@ interface ActiveMoveStemState {
     audioUrl: string;
 }
 
-export const MediaPool: React.FC = () => {
+interface MediaPoolProps {
+    onCollapse?: () => void;
+}
+
+export const MediaPool: React.FC<MediaPoolProps> = ({ onCollapse }) => {
     const { songs, moveCustomStemBetweenSongs, copyCustomStemToSong, removeStemFromSong } = useSongLibrary();
     const { addTrack, addClip, project, loadSongStemsToTimeline } = useTimeline();
     const [expandedSongs, setExpandedSongs] = useState<Record<string, boolean>>({});
@@ -77,8 +81,17 @@ export const MediaPool: React.FC = () => {
                 <div className="flex items-center gap-2">
                     <Disc className="w-4 h-4 text-yellow-400" />
                     <h3 className="text-xs sm:text-sm font-bold text-white tracking-tight">Media Pool</h3>
+                    <span className="text-[10px] font-semibold text-zinc-500">({completedSongs.length})</span>
                 </div>
-                <span className="text-[10px] font-semibold text-zinc-500">{completedSongs.length} Ready</span>
+                {onCollapse && (
+                    <button
+                        title="Collapse Media Pool"
+                        onClick={onCollapse}
+                        className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    >
+                        <ChevronLeft className="w-4 h-4" />
+                    </button>
+                )}
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">

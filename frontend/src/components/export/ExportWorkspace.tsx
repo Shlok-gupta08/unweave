@@ -1,15 +1,23 @@
 import React, { useState, useRef } from 'react';
-import { Download, CheckCircle2, Play, Pause, Sparkles } from 'lucide-react';
+import {
+    Download, CheckCircle2, Play, Pause, Sparkles, Headphones,
+    Radio
+} from 'lucide-react';
 import { useTimeline } from '../../context/TimelineContext';
 import { renderTimelineMixdown, audioBufferToMP3Blob, audioBufferToWavBlob } from '../../utils/audioUtils';
+import { render8DSpatialMixdown } from '../../utils/spatial8DRenderer';
 
 export const ExportWorkspace: React.FC = () => {
     const { project } = useTimeline();
 
+    // Export Master Mode: Standard Stereo (Default) vs 8D Binaural Spatial
+    const [exportMode, setExportMode] = useState<'standard' | '8d'>('standard');
+
+    // Standard Export Parameters (Defaulting to 48kHz and 320kbps MP3)
     const [target, setTarget] = useState<'master' | 'loop'>('master');
-    const [format, setFormat] = useState<'wav' | 'mp3'>('wav');
+    const [format, setFormat] = useState<'wav' | 'mp3'>('mp3');
     const [bitrate, setBitrate] = useState<128 | 192 | 320>(320);
-    const [sampleRate, setSampleRate] = useState<44100 | 48000>(44100);
+    const [sampleRate, setSampleRate] = useState<44100 | 48000>(48000);
     const [normalize, setNormalize] = useState(true);
     const [filename, setFilename] = useState(`unweave_mixdown_${new Date().toISOString().slice(0, 10)}`);
 
@@ -39,24 +47,44 @@ export const ExportWorkspace: React.FC = () => {
         }
 
         setIsRendering(true);
-        setRenderProgress(15);
-        setRenderStatus('Initializing offline audio rendering graph...');
+        setRenderProgress(10);
+        setRenderStatus('Initializing offline audio engine...');
 
         try {
             const rangeStart = target === 'loop' && project.loopStart !== null ? project.loopStart : 0;
             const rangeEnd = target === 'loop' && project.loopEnd !== null ? project.loopEnd : undefined;
 
-            setRenderProgress(35);
-            setRenderStatus('Summing tracks, EQ, pan, and volume faders...');
+            let renderedBuffer: AudioBuffer;
 
-            const renderedBuffer = await renderTimelineMixdown(project, {
-                rangeStart,
-                rangeEnd,
-                sampleRate,
-                normalize,
-            });
+            if (exportMode === '8d') {
+                renderedBuffer = await render8DSpatialMixdown(
+                    project,
+                    {
+                        rangeStart,
+                        rangeEnd,
+                        sampleRate,
+                        normalize,
+                        rotationPeriodSeconds: 10.0, // Optimal balanced dynamic orbit
+                        reverbPreset: 'studio',
+                        groundLowEnd: true,
+                    },
+                    (pct, status) => {
+                        setRenderProgress(pct);
+                        setRenderStatus(status);
+                    }
+                );
+            } else {
+                setRenderProgress(35);
+                setRenderStatus('Summing multi-track stereo mixdown, EQ, and faders...');
+                renderedBuffer = await renderTimelineMixdown(project, {
+                    rangeStart,
+                    rangeEnd,
+                    sampleRate,
+                    normalize,
+                });
+            }
 
-            setRenderProgress(70);
+            setRenderProgress(90);
             setRenderStatus(format === 'wav' ? 'Packaging 16-bit PCM WAV headers...' : `Encoding MP3 at ${bitrate} kbps...`);
 
             let outputBlob: Blob;
@@ -67,15 +95,17 @@ export const ExportWorkspace: React.FC = () => {
             }
 
             setRenderProgress(100);
-            setRenderStatus('Mixdown complete! Downloading...');
+            setRenderStatus('Export complete! Downloading compiled master file...');
 
             const blobUrl = URL.createObjectURL(outputBlob);
             setRenderedBlobUrl(blobUrl);
 
             // Auto-trigger download
+            const suffix = exportMode === '8d' ? '_8D' : '';
+            const finalFilename = `${filename || 'unweave_master'}${suffix}.${format}`;
             const a = document.createElement('a');
             a.href = blobUrl;
-            a.download = `${filename}.${format}`;
+            a.download = finalFilename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -109,11 +139,11 @@ export const ExportWorkspace: React.FC = () => {
             <div className="text-center max-w-2xl mx-auto space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-bold mb-2">
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Deliver / Mixdown Studio</span>
+                    <span>Mastering & Export Studio</span>
                 </div>
                 <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">Export & Master Your Mix</h2>
                 <p className="text-xs sm:text-sm text-zinc-400 font-medium">
-                    Render your multi-track timeline arrangement into pristine lossless WAV or high-bitrate MP3.
+                    Compile your multi-track timeline arrangement into studio stereo master or immersive 8D spatial audio.
                 </p>
             </div>
 
@@ -121,6 +151,59 @@ export const ExportWorkspace: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 {/* Left: Export Settings Form */}
                 <div className="lg:col-span-7 bg-zinc-950/80 border border-white/10 rounded-3xl p-5 sm:p-7 backdrop-blur-xl shadow-2xl space-y-6">
+
+                    {/* Master Mode Selector: Standard Stereo (Default) vs 8D Audio */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Mastering Engine</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setExportMode('standard')}
+                                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                                    exportMode === 'standard'
+                                        ? 'border-yellow-400 bg-yellow-500/10 shadow-[0_0_15px_rgba(250,204,21,0.15)]'
+                                        : 'border-white/5 bg-white/[0.02] hover:border-white/15'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-1.5 rounded-lg bg-white/10 text-white">
+                                            <Radio className="w-4 h-4" />
+                                        </div>
+                                        <span className="font-black text-sm text-white">Standard Stereo</span>
+                                    </div>
+                                    {exportMode === 'standard' && <CheckCircle2 className="w-4 h-4 text-yellow-400" />}
+                                </div>
+                                <p className="text-[11px] text-zinc-400">
+                                    Classic studio stereo master with custom timeline pan and 3-band EQ
+                                </p>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setExportMode('8d')}
+                                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                                    exportMode === '8d'
+                                        ? 'border-yellow-400 bg-yellow-500/10 shadow-[0_0_15px_rgba(250,204,21,0.15)]'
+                                        : 'border-white/5 bg-white/[0.02] hover:border-white/15'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-1.5 rounded-lg bg-yellow-500/20 text-yellow-400">
+                                            <Headphones className="w-4 h-4" />
+                                        </div>
+                                        <span className="font-black text-sm text-white">8D Audio</span>
+                                    </div>
+                                    {exportMode === '8d' && <CheckCircle2 className="w-4 h-4 text-yellow-400" />}
+                                </div>
+                                <p className="text-[11px] text-zinc-400">
+                                    Immersive 360° binaural spatialization (Optimized for headphones)
+                                </p>
+                            </button>
+                        </div>
+                    </div>
+
                     {/* Filename Input */}
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">File Name</label>
@@ -137,38 +220,40 @@ export const ExportWorkspace: React.FC = () => {
                         <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Audio Format</label>
                         <div className="grid grid-cols-2 gap-3">
                             <button
-                                onClick={() => setFormat('wav')}
-                                className={`p-4 rounded-2xl border text-left transition-all ${
-                                    format === 'wav'
-                                        ? 'border-yellow-400 bg-yellow-500/10 shadow-[0_0_15px_rgba(250,204,21,0.15)]'
-                                        : 'border-white/5 bg-white/[0.02] hover:border-white/15'
-                                }`}
-                            >
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="font-black text-sm text-white">WAV (PCM)</span>
-                                    {format === 'wav' && <CheckCircle2 className="w-4 h-4 text-yellow-400" />}
-                                </div>
-                                <p className="text-[11px] text-zinc-400">16-bit uncompressed lossless studio master</p>
-                            </button>
-
-                            <button
+                                type="button"
                                 onClick={() => setFormat('mp3')}
-                                className={`p-4 rounded-2xl border text-left transition-all ${
+                                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
                                     format === 'mp3'
                                         ? 'border-yellow-400 bg-yellow-500/10 shadow-[0_0_15px_rgba(250,204,21,0.15)]'
                                         : 'border-white/5 bg-white/[0.02] hover:border-white/15'
                                 }`}
                             >
                                 <div className="flex items-center justify-between mb-1">
-                                    <span className="font-black text-sm text-white">MP3</span>
+                                    <span className="font-black text-sm text-white">MP3 (Universal)</span>
                                     {format === 'mp3' && <CheckCircle2 className="w-4 h-4 text-yellow-400" />}
                                 </div>
-                                <p className="text-[11px] text-zinc-400">Compressed for easy sharing and streaming</p>
+                                <p className="text-[11px] text-zinc-400">High bitrate for mobile listening & streaming</p>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setFormat('wav')}
+                                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                                    format === 'wav'
+                                        ? 'border-yellow-400 bg-yellow-500/10 shadow-[0_0_15px_rgba(250,204,21,0.15)]'
+                                        : 'border-white/5 bg-white/[0.02] hover:border-white/15'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="font-black text-sm text-white">WAV (Lossless PCM)</span>
+                                    {format === 'wav' && <CheckCircle2 className="w-4 h-4 text-yellow-400" />}
+                                </div>
+                                <p className="text-[11px] text-zinc-400">16-bit uncompressed studio master for maximum fidelity</p>
                             </button>
                         </div>
                     </div>
 
-                    {/* MP3 Bitrate Options (if MP3 selected) */}
+                    {/* MP3 Bitrate Options */}
                     {format === 'mp3' && (
                         <div className="space-y-2 animate-in fade-in duration-300">
                             <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">MP3 Bitrate</label>
@@ -176,8 +261,9 @@ export const ExportWorkspace: React.FC = () => {
                                 {([128, 192, 320] as const).map((b) => (
                                     <button
                                         key={b}
+                                        type="button"
                                         onClick={() => setBitrate(b)}
-                                        className={`py-2 rounded-xl border text-xs font-bold transition-all ${
+                                        className={`py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                                             bitrate === b
                                                 ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300'
                                                 : 'border-white/5 bg-white/[0.02] text-zinc-400 hover:text-white'
@@ -195,8 +281,9 @@ export const ExportWorkspace: React.FC = () => {
                         <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Export Range</label>
                         <div className="grid grid-cols-2 gap-3">
                             <button
+                                type="button"
                                 onClick={() => setTarget('master')}
-                                className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all ${
+                                className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                                     target === 'master'
                                         ? 'border-yellow-400 bg-yellow-500/10 text-white'
                                         : 'border-white/5 bg-white/[0.02] text-zinc-400 hover:text-white'
@@ -206,9 +293,10 @@ export const ExportWorkspace: React.FC = () => {
                             </button>
 
                             <button
+                                type="button"
                                 onClick={() => setTarget('loop')}
                                 disabled={project.loopStart === null || project.loopEnd === null}
-                                className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                                     target === 'loop'
                                         ? 'border-yellow-400 bg-yellow-500/10 text-white'
                                         : 'border-white/5 bg-white/[0.02] text-zinc-400 hover:text-white'
@@ -224,17 +312,18 @@ export const ExportWorkspace: React.FC = () => {
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Sample Rate</label>
                             <div className="grid grid-cols-2 gap-2">
-                                {([44100, 48000] as const).map((sr) => (
+                                {([48000, 44100] as const).map((sr) => (
                                     <button
                                         key={sr}
+                                        type="button"
                                         onClick={() => setSampleRate(sr)}
-                                        className={`py-2 rounded-xl border text-xs font-bold transition-all ${
+                                        className={`py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                                             sampleRate === sr
                                                 ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300'
                                                 : 'border-white/5 bg-white/[0.02] text-zinc-400 hover:text-white'
                                         }`}
                                     >
-                                        {sr === 44100 ? '44.1 kHz (CD Quality)' : '48.0 kHz (Studio / Video)'}
+                                        {sr === 48000 ? '48.0 kHz (Studio Default)' : '44.1 kHz (CD Audio)'}
                                     </button>
                                 ))}
                             </div>
@@ -260,8 +349,14 @@ export const ExportWorkspace: React.FC = () => {
                         disabled={isRendering || project.clips.length === 0}
                         className="w-full py-4 rounded-2xl bg-yellow-500 text-black hover:bg-yellow-400 active:scale-[0.99] font-black text-sm sm:text-base tracking-tight transition-all shadow-[0_0_25px_rgba(250,204,21,0.3)] hover:shadow-[0_0_35px_rgba(250,204,21,0.5)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <Download className="w-5 h-5" />
-                        <span>{isRendering ? 'Rendering Mixdown...' : 'Render & Download Mixdown'}</span>
+                        {exportMode === '8d' ? <Headphones className="w-5 h-5" /> : <Download className="w-5 h-5" />}
+                        <span>
+                            {isRendering
+                                ? 'Rendering Master...'
+                                : exportMode === '8d'
+                                ? 'Render & Download 8D Master'
+                                : 'Render & Download Mixdown'}
+                        </span>
                     </button>
                 </div>
 
@@ -288,8 +383,8 @@ export const ExportWorkspace: React.FC = () => {
                             </div>
 
                             <div className="flex items-center justify-between">
-                                <span className="text-zinc-400">Sample Rate</span>
-                                <span className="font-bold text-white font-mono">{sampleRate} Hz</span>
+                                <span className="text-zinc-400">Master Engine</span>
+                                <span className="font-bold text-yellow-400">{exportMode === '8d' ? '8D Binaural Spatial' : 'Standard Stereo 2-Bus'}</span>
                             </div>
                         </div>
 
@@ -337,13 +432,17 @@ export const ExportWorkspace: React.FC = () => {
                         <div className="bg-zinc-950/80 border border-green-500/30 rounded-3xl p-5 backdrop-blur-xl shadow-xl animate-in fade-in duration-500 space-y-3">
                             <div className="flex items-center gap-2">
                                 <CheckCircle2 className="w-4 h-4 text-green-400" />
-                                <span className="text-xs font-bold text-green-300">Export Ready & Downloaded</span>
+                                <span className="text-xs font-bold text-green-300">
+                                    {exportMode === '8d' ? '8D Master Ready & Downloaded' : 'Export Ready & Downloaded'}
+                                </span>
                             </div>
 
                             <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-2xl">
                                 <div className="min-w-0 flex-1">
                                     <h4 className="text-xs font-bold text-white truncate">{filename}.{format}</h4>
-                                    <span className="text-[10px] text-zinc-500 uppercase font-semibold">{format} • {formatDuration(durationToExport)}</span>
+                                    <span className="text-[10px] text-zinc-500 uppercase font-semibold">
+                                        {format} • {formatDuration(durationToExport)} • {exportMode === '8d' ? '8D Spatial' : 'Stereo'}
+                                    </span>
                                 </div>
 
                                 <button

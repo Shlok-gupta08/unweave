@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import axios from 'axios';
 import { apiGet, apiPost, type ProcessingMode } from '../utils/api';
-import { saveBlobToDB, getBlobFromDB, deleteBlobFromDB } from '../utils/db';
+import { projectStorage } from '../services/projectStorage';
 import { useProcessingMode } from './ProcessingModeContext';
 import type { SongItem, Stems, JobStatus } from '../types';
 
@@ -15,7 +15,8 @@ interface SongLibraryContextValue {
     isBatchProcessing: boolean;
     addSongs: (files: File[]) => Promise<void>;
     removeSong: (songId: string) => Promise<void>;
-    processSong: (songId: string) => Promise<void>;
+    processSong: (songId: string, customFile?: File, passes?: number) => Promise<void>;
+    reprocessSong: (songId: string, customFile?: File, passes?: number) => Promise<void>;
     cancelProcessing: (songId: string) => Promise<void>;
     processAllQueued: () => Promise<void>;
     selectSong: (songId: string | null) => void;
@@ -25,6 +26,7 @@ interface SongLibraryContextValue {
     moveCustomStemBetweenSongs: (fromSongId: string, toSongId: string, stemName: string) => void;
     copyCustomStemToSong: (toSongId: string, stemName: string, url: string) => void;
     removeStemFromSong: (songId: string, stemName: string) => void;
+    restoreSongsState: (restoredSongs: SongItem[]) => void;
 }
 
 const SongLibraryContext = createContext<SongLibraryContextValue | null>(null);
@@ -39,7 +41,7 @@ export function useSongLibrary() {
 }
 
 export function SongLibraryProvider({ children }: { children: ReactNode }) {
-    const { processingMode } = useProcessingMode();
+    const { processingMode, separationPasses } = useProcessingMode();
     const [songs, setSongs] = useState<SongItem[]>(() => {
         try {
             const raw = localStorage.getItem(LIBRARY_STORAGE_KEY);
@@ -58,7 +60,7 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
     const [isBatchProcessing, setIsBatchProcessing] = useState(false);
     const activePollers = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
     const passNumberRefs = useRef<Map<string, number>>(new Map());
-    const prevRawProgressRefs = useRef<Map<string, number>>(new Map());
+    const prevRawProgressRefs = useRef<Map<string, number>>(new Map()).current;
     const abortControllers = useRef<Map<string, AbortController>>(new Map());
 
     // Save songs list to localStorage whenever it changes
@@ -76,7 +78,7 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
         }
     }, [songs]);
 
-    // Save active song ID
+    // Save activeSongId to localStorage
     useEffect(() => {
         if (activeSongId) {
             localStorage.setItem(ACTIVE_SONG_KEY, activeSongId);
@@ -85,45 +87,58 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
         }
     }, [activeSongId]);
 
-    // Hydrate blob: URLs from IndexedDB on initial mount
+    // Hydrate blob URLs & raw audio files on mount
     useEffect(() => {
-        const hydrateStemsFromDB = async () => {
+        const hydrateStorage = async () => {
             let changed = false;
-            const updatedSongs = await Promise.all(songs.map(async (song) => {
-                if (!song.stems) return song;
+            const updatedSongs = await Promise.all(
+                songs.map(async (song) => {
+                    let songModified = false;
+                    let updatedSong = { ...song };
 
-                const hydratedStems: Stems = { ...song.stems };
-                let songChanged = false;
-
-                for (const [stemName, url] of Object.entries(hydratedStems)) {
-                    if (url && (url.startsWith('blob:') || processingMode === 'gpu')) {
+                    // Restore raw original audio file if missing from memory
+                    if (!updatedSong.originalFile) {
                         try {
-                            const dbKey = `${song.id}_${stemName}`;
-                            const blob = await getBlobFromDB(dbKey);
-                            if (blob && blob.size > 0) {
-                                const safeBlob = new Blob([blob], { type: 'audio/mpeg' });
-                                hydratedStems[stemName] = URL.createObjectURL(safeBlob);
-                                songChanged = true;
+                            const rawFile = await projectStorage.getRawAudioFile(song.id, `${song.name}.mp3`);
+                            if (rawFile) {
+                                updatedSong.originalFile = rawFile;
+                                songModified = true;
+                                changed = true;
                             }
-                        } catch (err) {
-                            console.warn(`Could not hydrate stem ${stemName} for song ${song.name}`, err);
+                        } catch {
+                            // Ignore
                         }
                     }
-                }
 
-                if (songChanged) {
-                    changed = true;
-                    return { ...song, stems: hydratedStems };
-                }
-                return song;
-            }));
+                    if (song.status === 'complete' && song.stems) {
+                        const hydratedStems: Stems = { ...song.stems };
+                        for (const stemName of Object.keys(song.stems)) {
+                            const stemKey = `${song.id}_${stemName}`;
+                            try {
+                                const validUrl = await projectStorage.getStemAudioUrl(stemKey);
+                                if (validUrl) {
+                                    hydratedStems[stemName] = validUrl;
+                                    songModified = true;
+                                    changed = true;
+                                }
+                            } catch {
+                                // Ignore
+                            }
+                        }
+                        if (songModified) {
+                            updatedSong.stems = hydratedStems;
+                        }
+                    }
 
+                    return songModified ? updatedSong : song;
+                })
+            );
             if (changed) {
                 setSongs(updatedSongs);
             }
         };
 
-        hydrateStemsFromDB();
+        hydrateStorage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -147,7 +162,7 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
         setSongs(prev => prev.map(s => s.id === songId ? { ...s, ...updates } : s));
     }, []);
 
-    const startPollingJob = useCallback((songId: string, jobId: string, mode: ProcessingMode) => {
+    const startPollingJob = useCallback((songId: string, jobId: string, mode: ProcessingMode, jobPasses?: number) => {
         // Clear any existing poller for this song
         if (activePollers.current.has(songId)) {
             clearInterval(activePollers.current.get(songId)!);
@@ -155,7 +170,9 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
         }
 
         passNumberRefs.current.set(songId, 1);
-        prevRawProgressRefs.current.set(songId, 0);
+        prevRawProgressRefs.set(songId, 0);
+
+        const totalPasses = jobPasses || separationPasses || 2;
 
         const poll = async () => {
             try {
@@ -165,14 +182,14 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
                 const rawEta = data.eta_seconds;
 
                 let currentPass = passNumberRefs.current.get(songId) || 1;
-                const prevProgress = prevRawProgressRefs.current.get(songId) || 0;
+                const prevProgress = prevRawProgressRefs.get(songId) || 0;
 
-                // Detect dual-pass transition
-                if (prevProgress > 50 && rawProgress < 20 && currentPass === 1) {
-                    currentPass = 2;
-                    passNumberRefs.current.set(songId, 2);
+                // Detect multi-pass transition
+                if (prevProgress > 50 && rawProgress < 20 && currentPass < totalPasses) {
+                    currentPass += 1;
+                    passNumberRefs.current.set(songId, currentPass);
                 }
-                prevRawProgressRefs.current.set(songId, rawProgress);
+                prevRawProgressRefs.set(songId, rawProgress);
 
                 if (data.status === 'queued') {
                     updateSong(songId, {
@@ -185,22 +202,18 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
                     return;
                 }
 
-                let combinedProgress = 0;
-                let combinedEta: number | null = null;
-                if (currentPass === 1) {
-                    combinedProgress = Math.round(rawProgress / 2);
-                    combinedEta = rawEta !== null ? Math.round(rawEta * 2) : null;
-                } else {
-                    combinedProgress = Math.round(50 + rawProgress / 2);
-                    combinedEta = rawEta;
-                }
+                const completedPassesProgress = ((currentPass - 1) / totalPasses) * 100;
+                const currentPassSlice = (rawProgress / totalPasses);
+                const combinedProgress = Math.min(99, Math.round(completedPassesProgress + currentPassSlice));
+                const remainingPasses = Math.max(1, totalPasses - currentPass + 1);
+                const combinedEta = rawEta !== null ? Math.round(rawEta * remainingPasses) : null;
 
                 updateSong(songId, {
                     status: 'processing',
                     progress: combinedProgress,
                     etaSeconds: combinedEta,
                     passNumber: currentPass,
-                    statusMessage: data.message || 'Separating stems...',
+                    statusMessage: data.message || `Separating stems (Pass ${currentPass}/${totalPasses})...`,
                     deviceUsed: data.device_used,
                 });
 
@@ -217,48 +230,57 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
                                 v && v.startsWith('/stems/') ? `/gpu-api${v}` : v,
                             ])
                           )
-                        : data.stems;
+                        : Object.fromEntries(
+                            Object.entries(data.stems).map(([k, v]) => [
+                                k,
+                                v && v.startsWith('/stems/') ? `http://127.0.0.1:8010${v}` : v,
+                            ])
+                          );
 
-                    // Download blobs for GPU mode and persist to IndexedDB
-                    if (mode === 'gpu') {
-                        updateSong(songId, { statusMessage: 'Downloading stems for playback...' });
-                        try {
-                            const blobStems: Stems = {};
-                            for (const [stemName, stemUrl] of Object.entries(finalStems)) {
-                                if (!stemUrl) continue;
+                    updateSong(songId, { statusMessage: 'Saving stems into project storage...' });
+                    try {
+                        const blobStems: Stems = {};
+                        for (const [stemName, stemUrl] of Object.entries(finalStems)) {
+                            if (!stemUrl) continue;
+                            try {
                                 const resp = await fetch(stemUrl);
                                 if (resp.ok) {
                                     const blob = await resp.blob();
                                     const safeBlob = new Blob([blob], { type: 'audio/mpeg' });
-                                    await saveBlobToDB(`${songId}_${stemName}`, safeBlob);
+                                    await projectStorage.saveStemAudio(`${songId}_${stemName}`, safeBlob);
                                     blobStems[stemName] = URL.createObjectURL(safeBlob);
+                                } else {
+                                    blobStems[stemName] = stemUrl;
                                 }
+                            } catch (e) {
+                                console.warn(`Could not fetch stem audio for ${stemName}`, e);
+                                blobStems[stemName] = stemUrl;
                             }
-                            updateSong(songId, {
-                                status: 'complete',
-                                progress: 100,
-                                etaSeconds: 0,
-                                statusMessage: 'Separation complete!',
-                                stems: blobStems,
-                                processingTime: data.processing_time ?? undefined,
-                                deviceUsed: data.device_used ?? undefined,
-                            });
-                            return;
-                        } catch (err) {
-                            console.warn('GPU blob fetch fallback to direct URLs', err);
                         }
-                    }
 
-                    // For CPU mode or fallback
-                    updateSong(songId, {
-                        status: 'complete',
-                        progress: 100,
-                        etaSeconds: 0,
-                        statusMessage: 'Separation complete!',
-                        stems: finalStems,
-                        processingTime: data.processing_time ?? undefined,
-                        deviceUsed: data.device_used ?? undefined,
-                    });
+                        updateSong(songId, {
+                            status: 'complete',
+                            progress: 100,
+                            etaSeconds: 0,
+                            statusMessage: 'Separation complete!',
+                            stems: blobStems,
+                            processingTime: data.processing_time ?? undefined,
+                            deviceUsed: data.device_used ?? undefined,
+                        });
+                        return;
+                    } catch (err) {
+                        console.warn('Error saving stems to project storage fallback to URLs', err);
+                        updateSong(songId, {
+                            status: 'complete',
+                            progress: 100,
+                            etaSeconds: 0,
+                            statusMessage: 'Separation complete!',
+                            stems: finalStems,
+                            processingTime: data.processing_time ?? undefined,
+                            deviceUsed: data.device_used ?? undefined,
+                        });
+                        return;
+                    }
                 } else if (data.status === 'error' || data.status === 'cancelled') {
                     if (activePollers.current.has(songId)) {
                         clearInterval(activePollers.current.get(songId)!);
@@ -288,21 +310,45 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
         const timer = setInterval(poll, 1000);
         activePollers.current.set(songId, timer);
         poll();
-    }, [updateSong]);
+    }, [updateSong, separationPasses, prevRawProgressRefs]);
 
-    const processSong = useCallback(async (songId: string) => {
+    const processSong = useCallback(async (songId: string, customFile?: File, passes?: number) => {
         const song = songs.find(s => s.id === songId);
-        if (!song || !song.originalFile) {
+        let fileToUse = customFile || song?.originalFile;
+
+        // Auto-fetch from persistent project storage if missing from RAM
+        if (!fileToUse && song) {
+            try {
+                const storedFile = await projectStorage.getRawAudioFile(songId, `${song.name}.mp3`);
+                if (storedFile) {
+                    fileToUse = storedFile;
+                    updateSong(songId, { originalFile: storedFile });
+                }
+            } catch (err) {
+                console.warn('Could not restore raw audio from DB:', err);
+            }
+        }
+
+        if (customFile) {
+            projectStorage.saveRawAudio(songId, customFile).catch(() => {});
+        }
+
+        if (!song || !fileToUse) {
             console.error('Song or file not found for processing', songId);
             return;
         }
+
+        const effectivePasses = passes || separationPasses || 2;
 
         updateSong(songId, {
             status: 'uploading',
             progress: 0,
             etaSeconds: null,
+            passNumber: 1,
             statusMessage: 'Uploading audio to separator...',
             errorMessage: undefined,
+            originalFile: fileToUse,
+            separationPasses: effectivePasses,
         });
 
         // Abort previous request if any
@@ -313,7 +359,8 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
         abortControllers.current.set(songId, controller);
 
         const formData = new FormData();
-        formData.append('file', song.originalFile);
+        formData.append('file', fileToUse);
+        formData.append('shifts', String(effectivePasses));
 
         try {
             const res = await apiPost<{ job_id: string; message: string }>(
@@ -333,7 +380,7 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
                 statusMessage: 'Separation started...',
             });
 
-            startPollingJob(songId, jobId, processingMode);
+            startPollingJob(songId, jobId, processingMode, effectivePasses);
         } catch (err) {
             if (axios.isCancel(err)) return;
             console.error('Failed to start separation for song', song.name, err);
@@ -343,7 +390,24 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
                 errorMessage: axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Upload failed',
             });
         }
-    }, [songs, processingMode, updateSong, startPollingJob]);
+    }, [songs, processingMode, separationPasses, updateSong, startPollingJob]);
+
+    const reprocessSong = useCallback(async (songId: string, customFile?: File, passes?: number) => {
+        if (customFile) {
+            projectStorage.saveRawAudio(songId, customFile).catch(() => {});
+            updateSong(songId, {
+                originalFile: customFile,
+                status: 'queued',
+                progress: 0,
+                errorMessage: undefined,
+            });
+            setTimeout(() => {
+                processSong(songId, customFile, passes);
+            }, 50);
+            return;
+        }
+        processSong(songId, undefined, passes);
+    }, [updateSong, processSong]);
 
     const cancelProcessing = useCallback(async (songId: string) => {
         if (abortControllers.current.has(songId)) {
@@ -378,17 +442,20 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
 
         for (const file of files) {
             const id = `song_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            // Persist raw source audio to IndexedDB
+            await projectStorage.saveRawAudio(id, file);
+
             const newSong: SongItem = {
                 id,
                 name: file.name.replace(/\.[^/.]+$/, ''),
                 fileSize: file.size,
                 duration: null,
                 uploadedAt: Date.now(),
-                status: 'queued',
+                status: 'idle',
                 progress: 0,
                 etaSeconds: null,
                 passNumber: 1,
-                statusMessage: 'Queued for separation',
+                statusMessage: 'Ready to separate',
                 jobId: null,
                 stems: null,
                 originalFile: file,
@@ -406,7 +473,7 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
 
     const processAllQueued = useCallback(async () => {
         setIsBatchProcessing(true);
-        const queued = songs.filter(s => s.status === 'queued' || s.status === 'error' || s.status === 'cancelled');
+        const queued = songs.filter(s => s.status === 'idle' || s.status === 'queued' || s.status === 'error' || s.status === 'cancelled');
 
         for (const song of queued) {
             await processSong(song.id);
@@ -417,10 +484,11 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
     const removeSong = useCallback(async (songId: string) => {
         await cancelProcessing(songId);
 
-        // Clean up DB blobs for all stems of this song
+        // Clean up project storage for all stems and raw audio of this song
+        projectStorage.deleteRawAudio(songId).catch(() => {});
         const stemNames = ['Vocals', 'Drums', 'Bass', 'Guitar', 'Piano', 'Other'];
         for (const stem of stemNames) {
-            deleteBlobFromDB(`${songId}_${stem}`).catch(() => {});
+            projectStorage.deleteStemAudio(`${songId}_${stem}`).catch(() => {});
         }
 
         setSongs(prev => prev.filter(s => s.id !== songId));
@@ -435,14 +503,23 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
     }, [cancelProcessing, activeSongId]);
 
     const clearAllSongs = useCallback(async () => {
-        for (const song of songs) {
-            await removeSong(song.id);
-        }
         setSongs([]);
         setActiveSongId(null);
         localStorage.removeItem(LIBRARY_STORAGE_KEY);
         localStorage.removeItem(ACTIVE_SONG_KEY);
-    }, [songs, removeSong]);
+        await projectStorage.clearAutoSaveSession();
+    }, []);
+
+    const restoreSongsState = useCallback((restoredSongs: SongItem[]) => {
+        setSongs(restoredSongs);
+        if (restoredSongs.length > 0) {
+            setActiveSongId(restoredSongs[0].id);
+        } else {
+            setActiveSongId(null);
+            localStorage.removeItem(LIBRARY_STORAGE_KEY);
+            localStorage.removeItem(ACTIVE_SONG_KEY);
+        }
+    }, []);
 
     const selectSong = useCallback((songId: string | null) => {
         setActiveSongId(songId);
@@ -467,6 +544,7 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const removeStemFromSong = useCallback((songId: string, stemName: string) => {
+        projectStorage.deleteStemAudio(`${songId}_${stemName}`).catch(() => {});
         setSongs(prev => prev.map(s => {
             if (s.id !== songId || !s.stems) return s;
             const updatedStems = { ...s.stems };
@@ -517,6 +595,7 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
             addSongs,
             removeSong,
             processSong,
+            reprocessSong,
             cancelProcessing,
             processAllQueued,
             selectSong,
@@ -526,6 +605,7 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
             moveCustomStemBetweenSongs,
             copyCustomStemToSong,
             removeStemFromSong,
+            restoreSongsState,
         }}>
             {children}
         </SongLibraryContext.Provider>

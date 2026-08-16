@@ -9,11 +9,39 @@ import threading
 import logging
 import subprocess
 
-from fastapi import FastAPI, File, UploadFile, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+
+# FFmpeg PATH Auto-Discovery (Static imageio_ffmpeg + Bundled bin + System)
+try:
+    import imageio_ffmpeg
+    _ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    if _ffmpeg_exe and os.path.exists(_ffmpeg_exe):
+        _ffmpeg_dir = os.path.dirname(_ffmpeg_exe)
+        _std_ffmpeg = os.path.join(_ffmpeg_dir, "ffmpeg")
+        if not os.path.exists(_std_ffmpeg):
+            try:
+                os.symlink(_ffmpeg_exe, _std_ffmpeg)
+            except Exception:
+                shutil.copy2(_ffmpeg_exe, _std_ffmpeg)
+        os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
+except Exception:
+    pass
+
+_ffmpeg_search_dirs = [
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bin"),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/opt/local/bin",
+]
+for _dir in _ffmpeg_search_dirs:
+    if os.path.isdir(_dir) and any(f.lower().startswith("ffmpeg") for f in os.listdir(_dir)):
+        os.environ["PATH"] = _dir + os.pathsep + os.environ.get("PATH", "")
+        break
 
 # ============================================================
 # Logging
@@ -250,7 +278,11 @@ def separation_queue_worker():
     while True:
         try:
             job_item = separation_queue.get()
-            job_id, input_path, job_out_dir, job_temp_dir = job_item
+            if len(job_item) == 5:
+                job_id, input_path, job_out_dir, job_temp_dir, shifts = job_item
+            else:
+                job_id, input_path, job_out_dir, job_temp_dir = job_item
+                shifts = 2
 
             # Check if this job was cancelled while waiting in queue
             job = get_job(job_id)
@@ -267,7 +299,7 @@ def separation_queue_worker():
             update_queue_positions()
 
             # Execute single separation
-            run_separation(job_id, input_path, job_out_dir, job_temp_dir)
+            run_separation(job_id, input_path, job_out_dir, job_temp_dir, shifts=shifts)
 
         except Exception as e:
             log.exception(f"Queue worker encountered error: {e}")
@@ -316,7 +348,7 @@ def parse_tqdm_line(line: str, job_id: str, is_downloading: bool = False):
 # ============================================================
 # Separation Worker (Subprocess Managed)
 # ============================================================
-def run_separation(job_id: str, input_path: str, job_out_dir: str, job_temp_dir: str):
+def run_separation(job_id: str, input_path: str, job_out_dir: str, job_temp_dir: str, shifts: int = 2):
     """Spawns the worker.py script as a subprocess to perform separation."""
     try:
         update_job(job_id, status="processing", progress=0, message="Initializing worker...")
@@ -330,7 +362,8 @@ def run_separation(job_id: str, input_path: str, job_out_dir: str, job_temp_dir:
             "--input", input_path,
             "--out_dir", job_out_dir,
             "--device_type", DEVICE_TYPE,
-            "--models_dir", MODELS_DIR
+            "--models_dir", MODELS_DIR,
+            "--shifts", str(shifts)
         ]
 
         if sys.platform == "win32":
@@ -574,7 +607,10 @@ async def health():
 @app.post("/separate")
 @app.post("/api/separate/")
 @app.post("/api/separate")
-async def separate_audio(file: UploadFile = File(...)):
+async def separate_audio(
+    file: UploadFile = File(...),
+    shifts: int = Form(2)
+):
     """Upload audio and enqueue separation. Returns job_id for status polling."""
 
     if not file.filename:
@@ -610,11 +646,11 @@ async def separate_audio(file: UploadFile = File(...)):
         pos_text = "1st" if position == 1 else "2nd" if position == 2 else "3rd" if position == 3 else f"{position}th"
         initial_status = "queued"
         initial_message = f"In Queue ({pos_text} in line) — Waiting for active song to finish..."
-        log.info(f"⏳ Job {job_id} queued at position #{position} for {file.filename}")
+        log.info(f"⏳ Job {job_id} queued at position #{position} for {file.filename} (shifts={shifts})")
     else:
         initial_status = "processing"
         initial_message = "Initializing separation worker..."
-        log.info(f"🎵 Starting separation: {file.filename} ({file_size_mb:.1f} MB) on {DEVICE_TYPE.upper()}")
+        log.info(f"🎵 Starting separation: {file.filename} ({file_size_mb:.1f} MB, shifts={shifts}) on {DEVICE_TYPE.upper()}")
 
     # Initialize job tracking
     with jobs_lock:
@@ -630,7 +666,7 @@ async def separate_audio(file: UploadFile = File(...)):
         }
 
     # Add to single-worker sequential execution queue
-    separation_queue.put((job_id, input_path, job_out_dir, job_temp_dir))
+    separation_queue.put((job_id, input_path, job_out_dir, job_temp_dir, shifts))
 
     return {
         "job_id": job_id,

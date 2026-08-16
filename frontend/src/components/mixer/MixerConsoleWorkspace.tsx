@@ -1,7 +1,7 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import {
     SlidersHorizontal, Play, Pause, SkipBack, RotateCcw,
-    ShieldCheck
+    ShieldCheck, Undo2, Redo2
 } from 'lucide-react';
 import { useTimeline } from '../../context/TimelineContext';
 import { drawWaveformToCanvas } from '../../utils/waveform';
@@ -30,6 +30,10 @@ export const MixerConsoleWorkspace: React.FC = () => {
         seek,
         playheadTime,
         vuMeterLevels,
+        undo,
+        redo,
+        canUndo,
+        canRedo,
     } = useTimeline();
 
     const scrubberContainerRef = useRef<HTMLDivElement>(null);
@@ -64,6 +68,22 @@ export const MixerConsoleWorkspace: React.FC = () => {
 
     const masterVol = project.masterVolume ?? 1.0;
     const totalDuration = Math.max(1, project.duration || 180);
+
+    // Channel ordering with Bass and Vocals interchanged
+    const orderedTracks = useMemo(() => {
+        const score = (t: TimelineTrack) => {
+            const name = (t.name || '').toLowerCase();
+            const id = (t.id || '').toLowerCase();
+            if (name.includes('bass') || id.includes('bass')) return 0;
+            if (name.includes('drum') || id.includes('drum')) return 1;
+            if (name.includes('vocal') || id.includes('vocal')) return 2;
+            if (name.includes('guitar') || id.includes('guitar')) return 3;
+            if (name.includes('piano') || id.includes('piano')) return 4;
+            if (name.includes('other') || id.includes('other')) return 5;
+            return 6;
+        };
+        return [...project.tracks].sort((a, b) => score(a) - score(b));
+    }, [project.tracks]);
 
     // Draw consolidated waveform on top scrubber canvas
     useEffect(() => {
@@ -138,6 +158,26 @@ export const MixerConsoleWorkspace: React.FC = () => {
                     {/* Timecode */}
                     <div className="px-3 py-1 bg-black/60 border border-white/10 rounded-xl font-mono text-xs sm:text-sm font-black text-yellow-400 tabular-nums shadow-inner">
                         {formatPreciseTimecode(playheadTime)}
+                    </div>
+
+                    {/* Undo / Redo */}
+                    <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5">
+                        <button
+                            title="Undo (Ctrl+Z / Cmd+Z)"
+                            onClick={undo}
+                            disabled={!canUndo}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                        >
+                            <Undo2 className="w-4 h-4" />
+                        </button>
+                        <button
+                            title="Redo (Ctrl+Y / Cmd+Shift+Z)"
+                            onClick={redo}
+                            disabled={!canRedo}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                        >
+                            <Redo2 className="w-4 h-4" />
+                        </button>
                     </div>
 
                     <button
@@ -249,7 +289,7 @@ export const MixerConsoleWorkspace: React.FC = () => {
                     ) : (
                         (() => {
                             const hasSolo = project.tracks.some(t => t.isSolo);
-                            return project.tracks.map((track) => {
+                            return orderedTracks.map((track) => {
                                 const trackVolDb = formatVolumeDB(track.volume);
                                 const stemLabel = getTrackStemLabel(track);
                                 const isAudible = isPlaying && (hasSolo ? track.isSolo : !track.isMuted) && track.volume > 0.001;
@@ -298,6 +338,7 @@ export const MixerConsoleWorkspace: React.FC = () => {
                                                     step="0.5"
                                                     value={track.eqHigh}
                                                     onChange={(e) => updateTrack(track.id, { eqHigh: parseFloat(e.target.value) })}
+                                                    onPointerUp={(e) => updateTrack(track.id, { eqHigh: parseFloat(e.currentTarget.value) }, true)}
                                                     className="w-full h-1 accent-yellow-400 bg-white/10 rounded cursor-pointer"
                                                 />
                                             </div>
@@ -315,6 +356,7 @@ export const MixerConsoleWorkspace: React.FC = () => {
                                                     step="0.5"
                                                     value={track.eqMid}
                                                     onChange={(e) => updateTrack(track.id, { eqMid: parseFloat(e.target.value) })}
+                                                    onPointerUp={(e) => updateTrack(track.id, { eqMid: parseFloat(e.currentTarget.value) }, true)}
                                                     className="w-full h-1 accent-yellow-400 bg-white/10 rounded cursor-pointer"
                                                 />
                                             </div>
@@ -332,6 +374,7 @@ export const MixerConsoleWorkspace: React.FC = () => {
                                                     step="0.5"
                                                     value={track.eqLow}
                                                     onChange={(e) => updateTrack(track.id, { eqLow: parseFloat(e.target.value) })}
+                                                    onPointerUp={(e) => updateTrack(track.id, { eqLow: parseFloat(e.currentTarget.value) }, true)}
                                                     className="w-full h-1 accent-yellow-400 bg-white/10 rounded cursor-pointer"
                                                 />
                                             </div>
@@ -350,6 +393,7 @@ export const MixerConsoleWorkspace: React.FC = () => {
                                                 step="0.05"
                                                 value={track.pan}
                                                 onChange={(e) => updateTrack(track.id, { pan: parseFloat(e.target.value) })}
+                                                onPointerUp={(e) => updateTrack(track.id, { pan: parseFloat(e.currentTarget.value) }, true)}
                                                 className="w-full h-1 accent-yellow-400 bg-white/10 rounded cursor-pointer"
                                             />
                                         </div>
@@ -404,6 +448,7 @@ export const MixerConsoleWorkspace: React.FC = () => {
                                                     step="0.01"
                                                     value={track.volume}
                                                     onChange={(e) => updateTrack(track.id, { volume: parseFloat(e.target.value) })}
+                                                    onPointerUp={(e) => updateTrack(track.id, { volume: parseFloat(e.currentTarget.value) }, true)}
                                                     className="w-40 h-2 accent-yellow-400 bg-zinc-800 rounded-full -rotate-90 cursor-pointer shadow-inner"
                                                 />
                                             </div>

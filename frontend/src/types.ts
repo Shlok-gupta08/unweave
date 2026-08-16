@@ -17,7 +17,7 @@ export interface SeparationJob {
 }
 
 export interface JobStatus {
-    status: 'queued' | 'uploading' | 'processing' | 'complete' | 'error' | 'cancelled';
+    status: 'idle' | 'queued' | 'uploading' | 'processing' | 'complete' | 'error' | 'cancelled';
     progress: number;
     eta_seconds: number | null;
     message: string;
@@ -32,7 +32,7 @@ export interface SongItem {
     fileSize: number;
     duration: number | null;
     uploadedAt: number;
-    status: 'queued' | 'uploading' | 'processing' | 'complete' | 'error' | 'cancelled';
+    status: 'idle' | 'queued' | 'uploading' | 'processing' | 'complete' | 'error' | 'cancelled';
     progress: number;
     etaSeconds: number | null;
     passNumber: number;
@@ -44,6 +44,7 @@ export interface SongItem {
     processingTime?: number;
     originalFile?: File;
     errorMessage?: string;
+    separationPasses?: number;
 }
 
 export interface TimelineClip {
@@ -63,6 +64,26 @@ export interface TimelineClip {
     peaks?: number[]; // Pre-extracted waveform peaks
 }
 
+export interface TrackSpatialSettings {
+    pattern: 'circle' | 'front-ellipse' | 'static-center';
+    radius: number; // in meters (0.5 to 5.0m, default 2.5m)
+    speedSeconds: number; // orbit period in seconds (3s to 24s, default 10s)
+    direction: 1 | -1; // 1 = clockwise, -1 = counter-clockwise
+    reverbWet: number; // 0.0 to 0.40 (default 0.12)
+    elevation: number; // -1.0 to 1.5 (default 0.2)
+    isCenterLocked: boolean; // Ground low-end lock
+    intensity: number; // 0.0 to 1.5 (Spatial gain / intensity, default 1.0)
+    crossEarSpill: number; // 0.0 to 1.0 (Opposite ear room spill, default 0.35)
+}
+
+export interface GlobalSpatialSettings {
+    isManualMode: boolean; // true = Manual Studio, false = AI Auto-Guided
+    is8DBypassed: boolean; // true = flat stereo, false = active 8D binaural
+    masterSpeedMultiplier: number; // 0.5x, 1.0x, 1.5x, 2.0x
+    reverbPreset: 'studio' | 'concert' | 'cathedral' | 'cosmic' | 'dry';
+    masterSpread: number; // 0.5 to 2.0
+}
+
 export interface TimelineTrack {
     id: string;
     name: string;
@@ -74,6 +95,7 @@ export interface TimelineTrack {
     eqLow: number; // Low Shelf EQ gain in dB (-12 to +12, default 0)
     eqMid: number; // Peaking Mid EQ gain in dB (-12 to +12, default 0)
     eqHigh: number; // High Shelf EQ gain in dB (-12 to +12, default 0)
+    spatialSettings?: TrackSpatialSettings;
 }
 
 export interface TimelineProject {
@@ -89,9 +111,10 @@ export interface TimelineProject {
     isLooping: boolean;
     isSnappingEnabled: boolean;
     snapInterval: number; // in seconds (e.g. 0.5)
+    globalSpatialSettings?: GlobalSpatialSettings;
 }
 
-export type WorkspaceTab = 'separate' | 'editor' | 'mixer' | 'export';
+export type WorkspaceTab = 'separate' | 'editor' | 'mixer' | 'spatial' | 'export';
 
 export interface ExportOptions {
     target: 'master' | 'stems' | 'loop';
@@ -99,6 +122,20 @@ export interface ExportOptions {
     bitrate: 128 | 192 | 320; // for MP3
     sampleRate: 44100 | 48000;
     normalize: boolean;
+}
+
+export interface AutoSaveMeta {
+    songName: string;
+    songCount?: number;
+    stemCount: number;
+    trackCount: number;
+    lastSaved: number;
+    songId?: string | null;
+}
+
+export interface AutoSaveInfo {
+    exists: boolean;
+    meta?: AutoSaveMeta;
 }
 
 declare global {
@@ -109,7 +146,16 @@ declare global {
             onMenuAction: (callback: (action: string, payload?: unknown) => void) => () => void;
             sendAction: (channel: string, data?: unknown) => void;
             invokeAction: (channel: string, data?: unknown) => Promise<unknown>;
+            getAutoSaveInfo?: () => Promise<AutoSaveInfo>;
+            saveAutoSaveState?: (payload: { data: unknown; meta: AutoSaveMeta }) => Promise<{ success: boolean; error?: string }>;
+            loadAutoSaveState?: () => Promise<{ timelineProject?: TimelineProject; songs?: SongItem[] } | null>;
+            saveAudioFile?: (filename: string, base64Data: string) => Promise<{ success: boolean; filePath?: string }>;
+            loadAudioFile?: (filename: string) => Promise<string | null>;
+            clearAutoSave?: () => Promise<{ success: boolean }>;
+            openProjectsFolder?: () => Promise<{ success: boolean; path: string }>;
+            getProjectsPath?: () => Promise<string>;
         };
     }
 }
+
 

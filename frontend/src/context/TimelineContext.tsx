@@ -2,8 +2,8 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, ty
 import { audioEngine } from '../services/audioEngine';
 import { getOrComputePeaks, getOrFetchAudioBuffer } from '../utils/waveform';
 import { mergeStemsToBuffer, audioBufferToWavBlob } from '../utils/audioUtils';
-import { saveBlobToDB } from '../utils/db';
-import type { TimelineProject, TimelineTrack, TimelineClip, SongItem } from '../types';
+import { projectStorage } from '../services/projectStorage';
+import type { TimelineProject, TimelineTrack, TimelineClip, SongItem, TrackSpatialSettings, GlobalSpatialSettings } from '../types';
 
 const STEM_COLORS: Record<string, string> = {
     Vocals: '#ef4444',
@@ -22,12 +22,18 @@ interface TimelineContextValue {
     isPlaying: boolean;
     playheadTime: number;
     selectedClipId: string | null;
+    selectedClipIds: string[];
     selectedTrackId: string | null;
+    selectedTrackIds: string[];
     vuMeterLevels: { left: number; right: number; peak: number };
     // Track actions
     addTrack: (name?: string, color?: string) => string;
     removeTrack: (trackId: string) => void;
-    updateTrack: (trackId: string, updates: Partial<TimelineTrack>) => void;
+    updateTrack: (trackId: string, updates: Partial<TimelineTrack>, commitHistory?: boolean) => void;
+    updateTrackSpatialSettings: (trackId: string, settings: Partial<TrackSpatialSettings>) => void;
+    setGlobalSpatialSettings: (settings: Partial<GlobalSpatialSettings>) => void;
+    toggleSpatialManualMode: () => void;
+    toggleSpatial8DBypass: () => void;
     toggleTrackMute: (trackId: string) => void;
     toggleTrackSolo: (trackId: string) => void;
     resetTrackToDefaults: (trackId: string) => void;
@@ -37,18 +43,20 @@ interface TimelineContextValue {
     // Clip actions
     addClip: (clip: Omit<TimelineClip, 'id'>) => Promise<string>;
     updateClip: (clipId: string, updates: Partial<TimelineClip>) => void;
-    removeClip: (clipId: string) => void;
+    removeClip: (clipId?: string) => void;
     moveClip: (clipId: string, newStartTime: number, newTrackId?: string) => void;
     trimClip: (clipId: string, newOffset: number, newDuration: number, newStartTime?: number) => void;
     splitClipAtPlayhead: (clipId?: string) => void;
     duplicateClip: (clipId: string) => void;
     setClipGain: (clipId: string, gain: number) => void;
-    selectClip: (clipId: string | null) => void;
-    selectTrack: (trackId: string | null) => void;
+    selectClip: (clipId: string | null, isMultiSelect?: boolean) => void;
+    selectTrack: (trackId: string | null, isMultiSelect?: boolean) => void;
     // Merge Tracks
-    mergeTracks: (trackIds: string[], mergedName?: string) => Promise<{ trackId: string; trackName: string; audioUrl: string }>;
+    mergeTracks: (trackIds: string[], customName?: string) => Promise<{ trackId: string; trackName: string; audioUrl: string }>;
+    mergeSelectedTracks: (customName?: string) => Promise<{ trackId: string; trackName: string; audioUrl: string } | undefined>;
     // Song Import & Persistence
     loadSongStemsToTimeline: (song: SongItem) => Promise<void>;
+    restoreProjectState: (restoredProject: TimelineProject) => Promise<void>;
     clearTimeline: () => void;
     // Transport & Playback
     play: () => void;
@@ -68,10 +76,98 @@ interface TimelineContextValue {
 }
 
 const defaultTracks: TimelineTrack[] = [
-    { id: 'track_vocals', name: 'Vocals', color: '#ef4444', volume: 1.0, pan: 0.0, isMuted: false, isSolo: false, eqLow: 0, eqMid: 0, eqHigh: 0 },
-    { id: 'track_drums', name: 'Drums', color: '#f59e0b', volume: 1.0, pan: 0.0, isMuted: false, isSolo: false, eqLow: 0, eqMid: 0, eqHigh: 0 },
-    { id: 'track_bass', name: 'Bass', color: '#3b82f6', volume: 1.0, pan: 0.0, isMuted: false, isSolo: false, eqLow: 0, eqMid: 0, eqHigh: 0 },
-    { id: 'track_other', name: 'Instruments / Other', color: '#8b5cf6', volume: 1.0, pan: 0.0, isMuted: false, isSolo: false, eqLow: 0, eqMid: 0, eqHigh: 0 },
+    {
+        id: 'track_vocals',
+        name: 'Vocals',
+        color: '#ef4444',
+        volume: 1.0,
+        pan: 0.0,
+        isMuted: false,
+        isSolo: false,
+        eqLow: 0,
+        eqMid: 0,
+        eqHigh: 0,
+        spatialSettings: {
+            pattern: 'front-ellipse',
+            radius: 1.8,
+            speedSeconds: 10,
+            direction: 1,
+            reverbWet: 0.16,
+            elevation: 0.3,
+            isCenterLocked: false,
+            intensity: 1.0,
+            crossEarSpill: 0.35,
+        },
+    },
+    {
+        id: 'track_drums',
+        name: 'Drums',
+        color: '#f59e0b',
+        volume: 1.0,
+        pan: 0.0,
+        isMuted: false,
+        isSolo: false,
+        eqLow: 0,
+        eqMid: 0,
+        eqHigh: 0,
+        spatialSettings: {
+            pattern: 'static-center',
+            radius: 0,
+            speedSeconds: 0,
+            direction: 1,
+            reverbWet: 0.03,
+            elevation: 0,
+            isCenterLocked: true,
+            intensity: 1.0,
+            crossEarSpill: 0.15,
+        },
+    },
+    {
+        id: 'track_bass',
+        name: 'Bass',
+        color: '#3b82f6',
+        volume: 1.0,
+        pan: 0.0,
+        isMuted: false,
+        isSolo: false,
+        eqLow: 0,
+        eqMid: 0,
+        eqHigh: 0,
+        spatialSettings: {
+            pattern: 'static-center',
+            radius: 0,
+            speedSeconds: 0,
+            direction: 1,
+            reverbWet: 0.03,
+            elevation: 0,
+            isCenterLocked: true,
+            intensity: 1.0,
+            crossEarSpill: 0.15,
+        },
+    },
+    {
+        id: 'track_other',
+        name: 'Instruments / Other',
+        color: '#8b5cf6',
+        volume: 1.0,
+        pan: 0.0,
+        isMuted: false,
+        isSolo: false,
+        eqLow: 0,
+        eqMid: 0,
+        eqHigh: 0,
+        spatialSettings: {
+            pattern: 'circle',
+            radius: 3.2,
+            speedSeconds: 10,
+            direction: -1,
+            reverbWet: 0.16,
+            elevation: 0.15,
+            isCenterLocked: false,
+            intensity: 1.0,
+            crossEarSpill: 0.35,
+        },
+    },
 ];
 
 const initialProject: TimelineProject = {
@@ -87,6 +183,13 @@ const initialProject: TimelineProject = {
     isLooping: false,
     isSnappingEnabled: true,
     snapInterval: 0.5,
+    globalSpatialSettings: {
+        isManualMode: false,
+        is8DBypassed: false,
+        masterSpeedMultiplier: 1.0,
+        reverbPreset: 'studio',
+        masterSpread: 1.0,
+    },
 };
 
 const TimelineContext = createContext<TimelineContextValue | null>(null);
@@ -130,14 +233,18 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
 
     const [isPlaying, setIsPlaying] = useState(false);
     const [playheadTime, setPlayheadTime] = useState(0);
-    const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
-    const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
+    const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
+    const [selectedTrackIds, setSelectedTrackIds] = useState<string[]>([]);
     const [vuMeterLevels, setVuMeterLevels] = useState({ left: 0, right: 0, peak: 0 });
+
+    const selectedClipId = selectedClipIds[0] || null;
+    const selectedTrackId = selectedTrackIds[0] || null;
 
     // History stack for Undo / Redo
     const [history, setHistory] = useState<TimelineProject[]>([initialProject]);
     const [historyIndex, setHistoryIndex] = useState(0);
     const isUndoingOrRedoing = useRef(false);
+    const trackParamDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Real-time live VU meter polling during playback
     useEffect(() => {
@@ -340,14 +447,108 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
             pushHistory(nextProj);
             return nextProj;
         });
-        if (selectedTrackId === trackId) setSelectedTrackId(null);
-    }, [selectedTrackId, pushHistory]);
+        setSelectedTrackIds(prev => prev.filter(id => id !== trackId));
+    }, [pushHistory]);
 
-    const updateTrack = useCallback((trackId: string, updates: Partial<TimelineTrack>) => {
+    const updateTrack = useCallback((trackId: string, updates: Partial<TimelineTrack>, commitHistory = false) => {
         setProject(prev => {
             const nextTracks = prev.tracks.map(t => t.id === trackId ? { ...t, ...updates } : t);
             const nextProj = { ...prev, tracks: nextTracks };
+            if (commitHistory) {
+                pushHistory(nextProj);
+            } else {
+                if (trackParamDebounceRef.current) clearTimeout(trackParamDebounceRef.current);
+                trackParamDebounceRef.current = setTimeout(() => {
+                    pushHistory(nextProj);
+                }, 400);
+            }
             return nextProj;
+        });
+    }, [pushHistory]);
+
+    const updateTrackSpatialSettings = useCallback((trackId: string, settings: Partial<TrackSpatialSettings>) => {
+        setProject(prev => {
+            const nextTracks: TimelineTrack[] = prev.tracks.map(t => {
+                if (t.id !== trackId) return t;
+                const currentSpatial: TrackSpatialSettings = {
+                    pattern: 'circle',
+                    radius: 2.5,
+                    speedSeconds: 10,
+                    direction: 1,
+                    reverbWet: 0.12,
+                    elevation: 0.2,
+                    isCenterLocked: false,
+                    intensity: 1.0,
+                    crossEarSpill: 0.35,
+                    ...(t.spatialSettings || {}),
+                };
+                return {
+                    ...t,
+                    spatialSettings: {
+                        ...currentSpatial,
+                        ...settings,
+                    },
+                };
+            });
+            const nextProj = { ...prev, tracks: nextTracks };
+            return nextProj;
+        });
+    }, []);
+
+    const setGlobalSpatialSettings = useCallback((settings: Partial<GlobalSpatialSettings>) => {
+        setProject(prev => {
+            const currentGlobal = prev.globalSpatialSettings || {
+                isManualMode: false,
+                is8DBypassed: false,
+                masterSpeedMultiplier: 1.0,
+                reverbPreset: 'studio',
+                masterSpread: 1.0,
+            };
+            return {
+                ...prev,
+                globalSpatialSettings: {
+                    ...currentGlobal,
+                    ...settings,
+                },
+            };
+        });
+    }, []);
+
+    const toggleSpatialManualMode = useCallback(() => {
+        setProject(prev => {
+            const currentManual = prev.globalSpatialSettings?.isManualMode ?? false;
+            return {
+                ...prev,
+                globalSpatialSettings: {
+                    ...(prev.globalSpatialSettings || {
+                        isManualMode: false,
+                        is8DBypassed: false,
+                        masterSpeedMultiplier: 1.0,
+                        reverbPreset: 'studio',
+                        masterSpread: 1.0,
+                    }),
+                    isManualMode: !currentManual,
+                },
+            };
+        });
+    }, []);
+
+    const toggleSpatial8DBypass = useCallback(() => {
+        setProject(prev => {
+            const currentBypass = prev.globalSpatialSettings?.is8DBypassed ?? false;
+            return {
+                ...prev,
+                globalSpatialSettings: {
+                    ...(prev.globalSpatialSettings || {
+                        isManualMode: false,
+                        is8DBypassed: false,
+                        masterSpeedMultiplier: 1.0,
+                        reverbPreset: 'studio',
+                        masterSpread: 1.0,
+                    }),
+                    is8DBypassed: !currentBypass,
+                },
+            };
         });
     }, []);
 
@@ -362,9 +563,11 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
                     isSolo: nextMute ? false : t.isSolo,
                 };
             });
-            return { ...prev, tracks: nextTracks };
+            const nextProj = { ...prev, tracks: nextTracks };
+            pushHistory(nextProj);
+            return nextProj;
         });
-    }, []);
+    }, [pushHistory]);
 
     const toggleTrackSolo = useCallback((trackId: string) => {
         setProject(prev => {
@@ -379,9 +582,11 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
                     isMuted: nextSolo ? false : t.isMuted,
                 };
             });
-            return { ...prev, tracks: nextTracks };
+            const nextProj = { ...prev, tracks: nextTracks };
+            pushHistory(nextProj);
+            return nextProj;
         });
-    }, []);
+    }, [pushHistory]);
 
     const resetTrackToDefaults = useCallback((trackId: string) => {
         setProject(prev => {
@@ -465,17 +670,20 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
         });
     }, []);
 
-    const removeClip = useCallback((clipId: string) => {
+    const removeClip = useCallback((clipId?: string) => {
+        const idsToRemove = clipId ? [clipId] : selectedClipIds;
+        if (idsToRemove.length === 0) return;
+
         setProject(prev => {
             const nextProj = {
                 ...prev,
-                clips: prev.clips.filter(c => c.id !== clipId),
+                clips: prev.clips.filter(c => !idsToRemove.includes(c.id)),
             };
             pushHistory(nextProj);
             return nextProj;
         });
-        if (selectedClipId === clipId) setSelectedClipId(null);
-    }, [selectedClipId, pushHistory]);
+        setSelectedClipIds(prev => prev.filter(id => !idsToRemove.includes(id)));
+    }, [selectedClipIds, pushHistory]);
 
     const moveClip = useCallback((clipId: string, newStartTime: number, newTrackId?: string) => {
         const clampedStart = Math.max(0, newStartTime);
@@ -515,48 +723,70 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
     }, [pushHistory]);
 
     const splitClipAtPlayhead = useCallback((targetClipId?: string) => {
-        const clipId = targetClipId || selectedClipId;
-        if (!clipId) return;
+        let clipsToSplit: TimelineClip[] = [];
 
-        const clip = project.clips.find(c => c.id === clipId);
-        if (!clip) return;
-
-        const clipStart = clip.startTime;
-        const clipEnd = clip.startTime + clip.duration;
-        if (playheadTime <= clipStart + 0.05 || playheadTime >= clipEnd - 0.05) {
-            return;
+        if (targetClipId) {
+            const c = project.clips.find(item => item.id === targetClipId);
+            if (c) clipsToSplit = [c];
+        } else if (selectedClipIds.length > 0) {
+            // If clips are explicitly selected, split only those selected clips that intersect with the playhead
+            clipsToSplit = project.clips.filter(c => selectedClipIds.includes(c.id));
+        } else {
+            // If NO clip is selected, split ALL clips across all tracks that intersect with the playhead timestamp!
+            clipsToSplit = project.clips.filter(c => {
+                const start = c.startTime;
+                const end = c.startTime + c.duration;
+                return playheadTime >= start + 0.05 && playheadTime <= end - 0.05;
+            });
         }
 
-        const deltaT = playheadTime - clipStart;
-        const leftDuration = deltaT;
-        const rightOffset = clip.offset + deltaT;
-        const rightDuration = clip.duration - deltaT;
+        // Filter to only those intersecting with playhead timestamp
+        const validClips = clipsToSplit.filter(clip => {
+            const start = clip.startTime;
+            const end = clip.startTime + clip.duration;
+            return playheadTime >= start + 0.05 && playheadTime <= end - 0.05;
+        });
 
-        const rightClipId = `clip_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-        const rightClip: TimelineClip = {
-            ...clip,
-            id: rightClipId,
-            startTime: playheadTime,
-            offset: rightOffset,
-            duration: rightDuration,
-        };
+        if (validClips.length === 0) return;
+
+        const newRightClips: TimelineClip[] = [];
+        const validClipIds = validClips.map(c => c.id);
 
         setProject(prev => {
-            const nextClips = prev.clips.map(c => {
-                if (c.id !== clipId) return c;
+            const nextClips = prev.clips.map(clip => {
+                if (!validClipIds.includes(clip.id)) return clip;
+
+                const clipStart = clip.startTime;
+                const deltaT = playheadTime - clipStart;
+                const leftDuration = deltaT;
+                const rightOffset = clip.offset + deltaT;
+                const rightDuration = clip.duration - deltaT;
+
+                const rightClipId = `clip_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+                const rightClip: TimelineClip = {
+                    ...clip,
+                    id: rightClipId,
+                    startTime: playheadTime,
+                    offset: rightOffset,
+                    duration: rightDuration,
+                };
+                newRightClips.push(rightClip);
+
                 return {
-                    ...c,
+                    ...clip,
                     duration: leftDuration,
                 };
-            }).concat(rightClip);
+            }).concat(newRightClips);
 
             const nextProj = { ...prev, clips: nextClips };
             pushHistory(nextProj);
             return nextProj;
         });
 
-        setSelectedClipId(rightClipId);
-    }, [selectedClipId, project.clips, playheadTime, pushHistory]);
+        if (newRightClips.length > 0) {
+            setSelectedClipIds(newRightClips.map(c => c.id));
+        }
+    }, [selectedClipIds, project.clips, playheadTime, pushHistory]);
 
     const duplicateClip = useCallback((clipId: string) => {
         const clip = project.clips.find(c => c.id === clipId);
@@ -574,7 +804,7 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
             pushHistory(nextProj);
             return nextProj;
         });
-        setSelectedClipId(newId);
+        setSelectedClipIds([newId]);
     }, [project.clips, pushHistory]);
 
     const setClipGain = useCallback((clipId: string, gain: number) => {
@@ -582,16 +812,47 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
         updateClip(clipId, { gain: clampedGain });
     }, [updateClip]);
 
-    const selectClip = useCallback((clipId: string | null) => {
-        setSelectedClipId(clipId);
-        if (clipId) {
+    const selectClip = useCallback((clipId: string | null, isMultiSelect = false) => {
+        if (!clipId) {
+            setSelectedClipIds([]);
+            return;
+        }
+        if (isMultiSelect) {
+            setSelectedClipIds(prev => {
+                if (prev.includes(clipId)) {
+                    return prev.filter(id => id !== clipId);
+                } else {
+                    return [...prev, clipId];
+                }
+            });
             const clip = project.clips.find(c => c.id === clipId);
-            if (clip) setSelectedTrackId(clip.trackId);
+            if (clip) {
+                setSelectedTrackIds(prev => prev.includes(clip.trackId) ? prev : [...prev, clip.trackId]);
+            }
+        } else {
+            setSelectedClipIds([clipId]);
+            const clip = project.clips.find(c => c.id === clipId);
+            if (clip) setSelectedTrackIds([clip.trackId]);
         }
     }, [project.clips]);
 
-    const selectTrack = useCallback((trackId: string | null) => {
-        setSelectedTrackId(trackId);
+    const selectTrack = useCallback((trackId: string | null, isMultiSelect = false) => {
+        if (!trackId) {
+            setSelectedTrackIds([]);
+            return;
+        }
+        if (isMultiSelect) {
+            setSelectedTrackIds(prev => {
+                if (prev.includes(trackId)) {
+                    const next = prev.filter(id => id !== trackId);
+                    return next;
+                } else {
+                    return [...prev, trackId];
+                }
+            });
+        } else {
+            setSelectedTrackIds([trackId]);
+        }
     }, []);
 
     // ──────────────────────────────────────────────
@@ -611,8 +872,8 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
         const trackId = `track_merged_${Date.now()}`;
         const newBlobUrl = URL.createObjectURL(wavBlob);
 
-        // Persist blob
-        await saveBlobToDB(trackId, wavBlob);
+        // Permanently persist merged audio to project storage
+        await projectStorage.saveStemAudio(trackId, wavBlob);
 
         const newTrack: TimelineTrack = {
             id: trackId,
@@ -656,8 +917,55 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
             return nextProj;
         });
 
+        setSelectedTrackIds([trackId]);
         return { trackId, trackName: newTrackName, audioUrl: newBlobUrl };
     }, [project.clips, project.currentSongId, pushHistory]);
+
+    // Direct 1-click Quick Merge for currently selected tracks
+    const mergeSelectedTracks = useCallback(async (customName?: string): Promise<{ trackId: string; trackName: string; audioUrl: string } | undefined> => {
+        const tracksFromClips = project.clips.filter(c => selectedClipIds.includes(c.id)).map(c => c.trackId);
+        const allSelectedTrackIds = Array.from(new Set([...selectedTrackIds, ...tracksFromClips]));
+
+        if (allSelectedTrackIds.length < 2) {
+            alert('Please select at least 2 layers (Hold Cmd/Ctrl or Shift and click track headers or clips) to merge.');
+            return undefined;
+        }
+
+        const selectedTracks = project.tracks.filter(t => allSelectedTrackIds.includes(t.id));
+        const defaultName = customName || `Merged (${selectedTracks.map(t => t.name.split(' - ').pop() || t.name).join(', ')})`;
+        return await mergeTracks(allSelectedTrackIds, defaultName);
+    }, [selectedTrackIds, selectedClipIds, project.clips, project.tracks, mergeTracks]);
+
+    // Restore Project State from persistent storage
+    const restoreProjectState = useCallback(async (restoredProj: TimelineProject) => {
+        const hydratedClips = await Promise.all(restoredProj.clips.map(async (c) => {
+            let audioUrl = c.audioUrl;
+            if (!audioUrl || audioUrl.startsWith('blob:')) {
+                const validUrl = await projectStorage.getStemAudioUrl(c.trackId) || await projectStorage.getStemAudioUrl(`${c.songId}_${c.stemName}`);
+                if (validUrl) audioUrl = validUrl;
+            }
+            let peaks = c.peaks;
+            if (!peaks || peaks.length === 0) {
+                try {
+                    peaks = await getOrComputePeaks(audioUrl);
+                } catch {
+                    peaks = [];
+                }
+            }
+            return { ...c, audioUrl, peaks };
+        }));
+
+        const fullRestored: TimelineProject = {
+            ...initialProject,
+            ...restoredProj,
+            clips: hydratedClips,
+            playheadTime: 0,
+        };
+
+        setProject(fullRestored);
+        pushHistory(fullRestored);
+        seek(0);
+    }, [pushHistory, seek]);
 
     // ──────────────────────────────────────────────
     // 1-Click Import / Restore Song Stems to Timeline
@@ -767,10 +1075,14 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
 
     const clearTimeline = useCallback(() => {
         setProject(initialProject);
-        setSelectedClipId(null);
-        setSelectedTrackId(null);
+        setSavedSongProjects({});
+        setHistory([initialProject]);
+        setHistoryIndex(0);
+        setSelectedClipIds([]);
+        setSelectedTrackIds([]);
         seek(0);
         localStorage.removeItem(TIMELINE_STORAGE_KEY);
+        localStorage.removeItem(SONG_PROJECTS_STORAGE_KEY);
     }, [seek]);
 
     // ──────────────────────────────────────────────
@@ -834,11 +1146,18 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
             if (e.code === 'Space') {
                 e.preventDefault();
                 togglePlay();
-            } else if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey) {
+            } else if (
+                (e.ctrlKey || e.metaKey) &&
+                (e.key.toLowerCase() === 'b' || e.key.toLowerCase() === 'k' || e.key === '\\')
+            ) {
+                e.preventDefault();
                 splitClipAtPlayhead();
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
+                e.preventDefault();
+                mergeSelectedTracks().catch(() => {});
             } else if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (selectedClipId) {
-                    removeClip(selectedClipId);
+                if (selectedClipIds.length > 0) {
+                    removeClip();
                 }
             } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
                 e.preventDefault();
@@ -852,7 +1171,7 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [togglePlay, splitClipAtPlayhead, selectedClipId, removeClip, undo, redo]);
+    }, [togglePlay, splitClipAtPlayhead, mergeSelectedTracks, selectedClipIds, removeClip, undo, redo]);
 
     // Listen to native macOS Desktop Transport & Track menu actions
     useEffect(() => {
@@ -871,6 +1190,8 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
                     addTrack();
                 } else if (action === 'split-clip') {
                     splitClipAtPlayhead();
+                } else if (action === 'open-merge-dialog' || action === 'merge-tracks') {
+                    mergeSelectedTracks().catch(() => {});
                 } else if (action === 'toggle-snap') {
                     toggleSnapping();
                 } else if (action === 'reset-tracks') {
@@ -885,7 +1206,7 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
             });
             return unsubscribe;
         }
-    }, [togglePlay, pause, seek, project.duration, project.playheadTime, addTrack, splitClipAtPlayhead, toggleSnapping, resetAllTracksToDefaults, setMasterVolume, undo, redo]);
+    }, [togglePlay, pause, seek, project.duration, project.playheadTime, addTrack, splitClipAtPlayhead, mergeSelectedTracks, toggleSnapping, resetAllTracksToDefaults, setMasterVolume, undo, redo]);
 
     return (
         <TimelineContext.Provider value={{
@@ -893,11 +1214,17 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
             isPlaying,
             playheadTime,
             selectedClipId,
+            selectedClipIds,
             selectedTrackId,
+            selectedTrackIds,
             vuMeterLevels,
             addTrack,
             removeTrack,
             updateTrack,
+            updateTrackSpatialSettings,
+            setGlobalSpatialSettings,
+            toggleSpatialManualMode,
+            toggleSpatial8DBypass,
             toggleTrackMute,
             toggleTrackSolo,
             resetTrackToDefaults,
@@ -914,7 +1241,9 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
             selectClip,
             selectTrack,
             mergeTracks,
+            mergeSelectedTracks,
             loadSongStemsToTimeline,
+            restoreProjectState,
             clearTimeline,
             play,
             pause,

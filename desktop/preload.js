@@ -13,5 +13,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   invokeAction: (channel, data) => {
     return ipcRenderer.invoke(channel, data);
-  }
+  },
+  // Dedicated Project Storage APIs
+  getAutoSaveInfo: () => ipcRenderer.invoke('project:get-autosave-info'),
+  saveAutoSaveState: (payload) => ipcRenderer.invoke('project:save-autosave-state', payload),
+  loadAutoSaveState: () => ipcRenderer.invoke('project:load-autosave-state'),
+  saveAudioFile: (filename, base64Data) => ipcRenderer.invoke('project:save-audio-file', { filename, base64Data }),
+  loadAudioFile: (filename) => ipcRenderer.invoke('project:load-audio-file', { filename }),
+  clearAutoSave: () => ipcRenderer.invoke('project:clear-autosave'),
+  openProjectsFolder: () => ipcRenderer.invoke('project:open-projects-folder'),
+  getProjectsPath: () => ipcRenderer.invoke('project:get-projects-path'),
 });

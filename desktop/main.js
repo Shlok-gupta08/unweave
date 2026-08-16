@@ -1,7 +1,16 @@
 const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron');
 const path = require('path');
 const http = require('http');
+const fs = require('fs');
 const { spawn } = require('child_process');
+
+// Global safety against unhandled process crashes
+process.on('uncaughtException', (err) => {
+  console.warn('[Unweave Desktop] Handled uncaught exception:', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  console.warn('[Unweave Desktop] Handled unhandled rejection:', reason);
+});
 
 let mainWindow = null;
 let backendProcess = null;
@@ -35,20 +44,45 @@ async function startBackendSupervisor() {
     return;
   }
 
-  console.log('[Unweave Desktop] Starting AI Backend process...');
   const backendDir = isDev
     ? path.join(__dirname, '..', 'backend')
     : path.join(process.resourcesPath, 'backend');
 
-  const pythonExec = isDev
-    ? path.join(backendDir, '.venv', 'bin', 'python')
-    : path.join(backendDir, '.venv', 'bin', 'python');
+  const embeddedScript = path.join(backendDir, 'run_embedded_backend.sh');
+  const localVenvPy = path.join(backendDir, '.venv', 'bin', 'python');
+  const devWorkspacePy = path.join(process.env.HOME || '', 'Workspace', 'Projects', 'Unweave', 'backend', '.venv', 'bin', 'python');
+
+  let launchCmd = null;
+  let launchArgs = [];
+
+  if (fs.existsSync(embeddedScript)) {
+    launchCmd = '/bin/bash';
+    launchArgs = [embeddedScript];
+  } else if (fs.existsSync(localVenvPy)) {
+    launchCmd = localVenvPy;
+    launchArgs = ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
+  } else if (fs.existsSync(devWorkspacePy)) {
+    launchCmd = devWorkspacePy;
+    launchArgs = ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
+  }
+
+  if (!launchCmd) {
+    console.log('[Unweave Desktop] No local or embedded backend runtime found.');
+    return;
+  }
+
+  console.log(`[Unweave Desktop] Starting AI Backend process: ${launchCmd} in ${backendDir}...`);
 
   try {
-    backendProcess = spawn(pythonExec, ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)], {
+    backendProcess = spawn(launchCmd, launchArgs, {
       cwd: backendDir,
       env: { ...process.env, PYTHONUNBUFFERED: '1' },
       stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    backendProcess.on('error', (err) => {
+      console.warn('[Unweave Desktop] Backend spawn error:', err.message);
+      backendProcess = null;
     });
 
     backendProcess.stdout.on('data', (data) => {
@@ -135,6 +169,22 @@ function buildMacMenu() {
     {
       label: 'File',
       submenu: [
+        {
+          label: 'New Studio Project',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => sendMenuAction('new-project')
+        },
+        {
+          label: 'Save Project As...',
+          accelerator: 'Shift+CmdOrCtrl+S',
+          click: () => sendMenuAction('save-project-as')
+        },
+        {
+          label: 'Open Project Manager...',
+          accelerator: 'CmdOrCtrl+P',
+          click: () => sendMenuAction('open-project-manager')
+        },
+        { type: 'separator' },
         {
           label: 'Import Audio Files...',
           accelerator: 'CmdOrCtrl+O',
@@ -360,9 +410,151 @@ async function createMainWindow() {
 }
 
 // ──────────────────────────────────────────────
+// Dedicated Project & Auto-Save File System
+// ──────────────────────────────────────────────
+const PROJECTS_DIR = path.join(app.getPath('userData'), 'projects');
+const AUTOSAVE_DIR = path.join(PROJECTS_DIR, 'autosave');
+const AUTOSAVE_AUDIO_DIR = path.join(AUTOSAVE_DIR, 'audio');
+
+function ensureProjectDirs() {
+  try {
+    if (!fs.existsSync(PROJECTS_DIR)) fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+    if (!fs.existsSync(AUTOSAVE_DIR)) fs.mkdirSync(AUTOSAVE_DIR, { recursive: true });
+    if (!fs.existsSync(AUTOSAVE_AUDIO_DIR)) fs.mkdirSync(AUTOSAVE_AUDIO_DIR, { recursive: true });
+  } catch (err) {
+    console.warn('[Unweave Desktop] Failed to create project directories:', err.message);
+  }
+}
+
+// Register IPC handlers for project storage
+ipcMain.handle('project:get-autosave-info', async () => {
+  ensureProjectDirs();
+  const metaPath = path.join(AUTOSAVE_DIR, 'project_meta.json');
+  const projectPath = path.join(AUTOSAVE_DIR, 'project.json');
+
+  if (!fs.existsSync(projectPath)) {
+    return { exists: false };
+  }
+
+  try {
+    let meta = {};
+    if (fs.existsSync(metaPath)) {
+      meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    } else {
+      const stats = fs.statSync(projectPath);
+      meta = { lastSaved: stats.mtimeMs };
+    }
+    return { exists: true, meta };
+  } catch (err) {
+    console.warn('[Unweave Desktop] Error reading autosave info:', err.message);
+    return { exists: false };
+  }
+});
+
+ipcMain.handle('project:save-autosave-state', async (_event, payload) => {
+  ensureProjectDirs();
+  try {
+    const projectPath = path.join(AUTOSAVE_DIR, 'project.json');
+    const metaPath = path.join(AUTOSAVE_DIR, 'project_meta.json');
+
+    const projectData = JSON.stringify(payload.data || payload, null, 2);
+    fs.writeFileSync(projectPath, projectData, 'utf8');
+
+    const meta = {
+      songName: payload.meta?.songName || 'Untitled Session',
+      stemCount: payload.meta?.stemCount || 0,
+      trackCount: payload.meta?.trackCount || 0,
+      lastSaved: Date.now(),
+      songId: payload.meta?.songId || null,
+    };
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf8');
+
+    return { success: true };
+  } catch (err) {
+    console.error('[Unweave Desktop] Error saving autosave state:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('project:load-autosave-state', async () => {
+  ensureProjectDirs();
+  const projectPath = path.join(AUTOSAVE_DIR, 'project.json');
+  if (!fs.existsSync(projectPath)) return null;
+
+  try {
+    const raw = fs.readFileSync(projectPath, 'utf8');
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('[Unweave Desktop] Error loading autosave state:', err);
+    return null;
+  }
+});
+
+ipcMain.handle('project:save-audio-file', async (_event, { filename, base64Data }) => {
+  ensureProjectDirs();
+  try {
+    const filePath = path.join(AUTOSAVE_AUDIO_DIR, filename);
+    const buffer = Buffer.from(base64Data, 'base64');
+    fs.writeFileSync(filePath, buffer);
+    return { success: true, filePath };
+  } catch (err) {
+    console.error('[Unweave Desktop] Error saving audio file:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('project:load-audio-file', async (_event, { filename }) => {
+  ensureProjectDirs();
+  try {
+    const filePath = path.join(AUTOSAVE_AUDIO_DIR, filename);
+    if (!fs.existsSync(filePath)) return null;
+
+    const buffer = fs.readFileSync(filePath);
+    return buffer.toString('base64');
+  } catch (err) {
+    console.error('[Unweave Desktop] Error loading audio file:', err);
+    return null;
+  }
+});
+
+ipcMain.handle('project:clear-autosave', async () => {
+  ensureProjectDirs();
+  try {
+    const files = fs.readdirSync(AUTOSAVE_DIR);
+    for (const f of files) {
+      const fullPath = path.join(AUTOSAVE_DIR, f);
+      if (f === 'audio') {
+        const audioFiles = fs.readdirSync(fullPath);
+        for (const af of audioFiles) {
+          fs.unlinkSync(path.join(fullPath, af));
+        }
+      } else {
+        fs.unlinkSync(fullPath);
+      }
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('[Unweave Desktop] Error clearing autosave:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('project:open-projects-folder', async () => {
+  ensureProjectDirs();
+  await shell.openPath(PROJECTS_DIR);
+  return { success: true, path: PROJECTS_DIR };
+});
+
+ipcMain.handle('project:get-projects-path', async () => {
+  ensureProjectDirs();
+  return PROJECTS_DIR;
+});
+
+// ──────────────────────────────────────────────
 // App Lifecycle
 // ──────────────────────────────────────────────
 app.whenReady().then(async () => {
+  ensureProjectDirs();
   await startBackendSupervisor();
   await createMainWindow();
 

@@ -6,7 +6,7 @@ import type { TimelineTrack } from '../../types';
 interface TimelineTrackHeaderProps {
     track: TimelineTrack;
     isSelected: boolean;
-    onSelect: () => void;
+    onSelect: (isMultiSelect?: boolean) => void;
 }
 
 export const TimelineTrackHeader: React.FC<TimelineTrackHeaderProps> = ({
@@ -35,7 +35,7 @@ export const TimelineTrackHeader: React.FC<TimelineTrackHeaderProps> = ({
     const handleNameSubmit = () => {
         setIsEditingName(false);
         if (nameVal.trim()) {
-            updateTrack(track.id, { name: nameVal.trim() });
+            updateTrack(track.id, { name: nameVal.trim() }, true);
         }
     };
 
@@ -53,22 +53,44 @@ export const TimelineTrackHeader: React.FC<TimelineTrackHeaderProps> = ({
 
     return (
         <div
-            onClick={onSelect}
-            className={`w-64 h-24 p-2.5 bg-zinc-950 border-r border-b border-white/10 flex flex-col justify-between select-none relative group transition-colors ${
-                isSelected ? 'bg-zinc-900/90' : 'hover:bg-zinc-900/40'
+            onClick={(e) => {
+                const isMulti = e.metaKey || e.ctrlKey || e.shiftKey;
+                onSelect(isMulti);
+            }}
+            className={`w-64 h-24 p-2.5 bg-zinc-950 border-r border-b transition-all duration-150 flex flex-col justify-between select-none relative group cursor-pointer ${
+                isSelected
+                    ? 'bg-yellow-500/[0.08] border-yellow-500/40 shadow-[inset_0_0_12px_rgba(250,204,21,0.06)]'
+                    : 'border-white/10 hover:bg-zinc-900/40'
             }`}
         >
             {/* Left Color Swatch Line */}
             <div
-                className="absolute left-0 top-0 bottom-0 w-1"
-                style={{ backgroundColor: track.color }}
+                className={`absolute left-0 top-0 bottom-0 transition-all ${
+                    isSelected ? 'w-1.5 shadow-[0_0_8px_rgba(250,204,21,0.8)]' : 'w-1'
+                }`}
+                style={{ backgroundColor: isSelected ? '#facc15' : track.color }}
             />
 
             {/* Top Row: Track Name & Track Actions */}
             <div className="flex items-center justify-between gap-1 pl-1.5">
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <button
+                        type="button"
+                        title={isSelected ? "Selected (Click to deselect)" : "Click to select layer (Cmd+Click for multi-selection)"}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onSelect(true);
+                        }}
+                        className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                            isSelected
+                                ? 'bg-yellow-400 border-yellow-400 text-black shadow-[0_0_8px_rgba(250,204,21,0.5)]'
+                                : 'border-white/20 bg-white/5 hover:border-yellow-400/60'
+                        }`}
+                    >
+                        {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    </button>
                     <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        className="w-2 h-2 rounded-full shrink-0"
                         style={{ backgroundColor: track.color }}
                     />
                     {isEditingName ? (

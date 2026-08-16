@@ -88,100 +88,88 @@ if [ -f "$ROOT_DIR/desktop/assets/Unweave.icns" ]; then
     cp "$ROOT_DIR/desktop/assets/Unweave.icns" "$APP_BUNDLE/Contents/Resources/electron.icns"
 fi
 
-echo -e "  ${GREEN}✅ $APP_NAME.app bundle generated successfully${NC}"
+# -----------------------------------------------------------
+# 3.5. Embed Standalone Python AI Backend & PyTorch
+# -----------------------------------------------------------
+echo -e "${YELLOW}[4/6] Embedding Standalone Python Runtime & PyTorch Backend...${NC}"
+BACKEND_APP_DIR="$APP_BUNDLE/Contents/Resources/backend"
+mkdir -p "$BACKEND_APP_DIR"
+mkdir -p "$BACKEND_APP_DIR/static_stems"
+mkdir -p "$BACKEND_APP_DIR/temp_audio"
+mkdir -p "$BACKEND_APP_DIR/models"
+
+cp "$ROOT_DIR/backend/main.py" "$BACKEND_APP_DIR/main.py"
+cp "$ROOT_DIR/backend/worker.py" "$BACKEND_APP_DIR/worker.py"
+cp "$ROOT_DIR/backend/run_embedded_backend.sh" "$BACKEND_APP_DIR/run_embedded_backend.sh"
+chmod +x "$BACKEND_APP_DIR/run_embedded_backend.sh"
+
+if [ -d "$ROOT_DIR/backend/models" ]; then
+    cp -R "$ROOT_DIR/backend/models/"* "$BACKEND_APP_DIR/models/" 2>/dev/null || true
+fi
+
+# Copy Python.framework
+mkdir -p "$BACKEND_APP_DIR/python/Frameworks"
+if [ -d "/opt/homebrew/opt/python@3.11/Frameworks/Python.framework" ]; then
+    cp -R "/opt/homebrew/opt/python@3.11/Frameworks/Python.framework" "$BACKEND_APP_DIR/python/Frameworks/"
+fi
+
+# Copy site-packages with PyTorch, Demucs, imageio-ffmpeg, etc.
+mkdir -p "$BACKEND_APP_DIR/python/lib/python3.11"
+if [ -d "$ROOT_DIR/backend/.venv/lib/python3.11/site-packages" ]; then
+    cp -R "$ROOT_DIR/backend/.venv/lib/python3.11/site-packages" "$BACKEND_APP_DIR/python/lib/python3.11/"
+fi
+
+# Ensure standalone FFmpeg binary is available in bin/
+mkdir -p "$BACKEND_APP_DIR/bin"
+STATIC_FFMPEG_SRC=$(find "$BACKEND_APP_DIR/python/lib/python3.11/site-packages/imageio_ffmpeg/binaries" -name "ffmpeg*" 2>/dev/null | head -1)
+if [ -n "$STATIC_FFMPEG_SRC" ] && [ -f "$STATIC_FFMPEG_SRC" ]; then
+    cp "$STATIC_FFMPEG_SRC" "$BACKEND_APP_DIR/bin/ffmpeg"
+    chmod +x "$BACKEND_APP_DIR/bin/ffmpeg"
+elif [ -f "/opt/homebrew/bin/ffmpeg" ]; then
+    cp "/opt/homebrew/bin/ffmpeg" "$BACKEND_APP_DIR/bin/ffmpeg" 2>/dev/null || true
+fi
+
+echo -e "  ${GREEN}✅ Standalone Python AI backend & FFmpeg embedded into app bundle${NC}"
+
+echo -e "  ${GREEN}✅ $APP_NAME.app bundle assembled successfully${NC}"
 
 # -----------------------------------------------------------
-# 4. Ad-Hoc Sign App Bundle
+# 5. Ad-Hoc Sign App Bundle
 # -----------------------------------------------------------
-echo -e "${YELLOW}[4/6] Code-signing $APP_NAME.app (Ad-Hoc)...${NC}"
+echo -e "${YELLOW}[5/6] Code-signing $APP_NAME.app (Ad-Hoc)...${NC}"
 codesign --force --deep --sign - "$APP_BUNDLE" 2>/dev/null || true
 echo -e "  ${GREEN}✅ App bundle signed${NC}"
 
 # -----------------------------------------------------------
-# 5. Generate Custom Background
+# 6. Build Drag-and-Drop .dmg Installer
 # -----------------------------------------------------------
-echo -e "${YELLOW}[5/6] Generating Custom Retina DMG Background...${NC}"
-cd "$ROOT_DIR"
-if [ -f "backend/.venv/bin/python" ]; then
-    backend/.venv/bin/python scripts/generate_dmg_background.py || true
-fi
+echo -e "${YELLOW}[6/6] Creating $APP_NAME.dmg Installer...${NC}"
+DMG_STAGE="$DIST_DIR/dmg_staging"
+rm -rf "$DMG_STAGE" "$DMG_PATH" "$DMG_TMP"
+mkdir -p "$DMG_STAGE"
 
-# -----------------------------------------------------------
-# 6. Build Styled Drag-and-Drop .dmg Installer
-# -----------------------------------------------------------
-echo -e "${YELLOW}[6/6] Formatting & Styling $APP_NAME.dmg...${NC}"
-rm -f "$DMG_TMP" "$DMG_PATH"
-MOUNT_DIR="/tmp/unweave_mount"
+# Copy App Bundle and create Applications symlink
+cp -R "$APP_BUNDLE" "$DMG_STAGE/$APP_NAME.app"
+ln -s /Applications "$DMG_STAGE/Applications"
 
-# Ensure clean slate
-hdiutil detach "$MOUNT_DIR" -force 2>/dev/null || true
-rm -rf "$MOUNT_DIR"
-mkdir -p "$MOUNT_DIR"
+# Build pristine compressed read-only DMG directly from staging folder
+hdiutil create \
+    -volname "$VOL_NAME" \
+    -srcfolder "$DMG_STAGE" \
+    -ov \
+    -format UDZO \
+    -imagekey zlib-level=9 \
+    "$DMG_PATH" >/dev/null
 
-# Create a writable DMG image
-hdiutil create -size 300m -fs HFS+ -volname "$VOL_NAME" -ov "$DMG_TMP" >/dev/null
-
-# Mount with fixed mountpoint
-hdiutil attach -readwrite -noverify -noautoopen -mountpoint "$MOUNT_DIR" "$DMG_TMP" >/dev/null
-
-echo -e "  Mounted staging volume at: $MOUNT_DIR"
-
-# Copy App and create Applications link
-cp -R "$APP_BUNDLE" "$MOUNT_DIR/"
-ln -s /Applications "$MOUNT_DIR/Applications"
-
-# Copy background graphic if available
-if [ -f "$ROOT_DIR/desktop/assets/dmg-background.png" ]; then
-    mkdir -p "$MOUNT_DIR/.background"
-    cp "$ROOT_DIR/desktop/assets/dmg-background.png" "$MOUNT_DIR/.background/background.png"
-fi
-
-# Apply AppleScript visual layout to Finder
-echo -e "  Applying Finder drag-and-drop presentation..."
-osascript -e "
-tell application \"Finder\"
-    tell disk \"$VOL_NAME\"
-        open
-        set current view of container window to icon view
-        set toolbar visible of container window to false
-        set statusbar visible of container window to false
-        set the bounds of container window to {200, 150, 740, 530}
-        set theViewOptions to the icon view options of container window
-        set icon size of theViewOptions to 110
-        set text size of theViewOptions to 13
-        set arrangement of theViewOptions to not arranged
-        try
-            set background picture of theViewOptions to file \".background:background.png\"
-        end try
-        set position of item \"$APP_NAME.app\" of container window to {130, 200}
-        set position of item \"Applications\" of container window to {410, 200}
-        close
-        open
-        update without registering applications
-        delay 2
-    end tell
-end tell
-" 2>/dev/null || true
-
-sync
-
-# Detach the staging volume
-echo -e "  Finalizing disk image..."
-hdiutil detach "$MOUNT_DIR" -force >/dev/null || true
-rm -rf "$MOUNT_DIR"
-sleep 1
-
-# Convert to final compressed read-only DMG
-hdiutil convert "$DMG_TMP" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH" >/dev/null
-rm -f "$DMG_TMP"
+rm -rf "$DMG_STAGE"
 
 echo ""
 echo -e "${GREEN}====================================================${NC}"
-echo -e "${GREEN}   🎉 Styled DMG Packaging Complete!               ${NC}"
+echo -e "${GREEN}   🎉 Packaging Complete!                          ${NC}"
 echo -e "${GREEN}====================================================${NC}"
 echo ""
 echo -e "  📂 App Bundle:  ${CYAN}$APP_BUNDLE${NC}"
 echo -e "  💿 DMG Package: ${CYAN}$DMG_PATH${NC} ($(du -sh "$DMG_PATH" | cut -f1))"
 echo ""
-echo -e "Double-click ${CYAN}$DMG_PATH${NC} to view the beautiful drag-and-drop installer!"
+echo -e "Double-click ${CYAN}$DMG_PATH${NC} and drag ${APP_NAME} to Applications!"
 echo ""

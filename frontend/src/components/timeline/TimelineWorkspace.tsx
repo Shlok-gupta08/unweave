@@ -1,13 +1,15 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Plus, ChevronLeft, ChevronRight, Download, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Plus, ChevronRight, Download, RotateCcw, SlidersHorizontal, Combine, Disc, Folder } from 'lucide-react';
 import { useTimeline } from '../../context/TimelineContext';
 import { useSongLibrary } from '../../context/SongLibraryContext';
+import { projectStorage } from '../../services/projectStorage';
 import { MediaPool } from './MediaPool';
 import { TimelineTransport } from './TimelineTransport';
 import { TimelineRuler } from './TimelineRuler';
 import { TimelineTrackHeader } from './TimelineTrackHeader';
 import { TimelineTrackLane } from './TimelineTrackLane';
 import { MergeDialog } from '../MergeDialog';
+import { ProjectManagerModal } from '../modals/ProjectManagerModal';
 
 interface TimelineWorkspaceProps {
     onNavigateToExport?: () => void;
@@ -18,18 +20,27 @@ export const TimelineWorkspace: React.FC<TimelineWorkspaceProps> = ({ onNavigate
         project,
         playheadTime,
         isPlaying,
-        selectedTrackId,
+        selectedTrackIds,
+        selectedClipIds,
         selectTrack,
+        selectClip,
         addTrack,
         resetAllTracksToDefaults,
         mergeTracks,
+        mergeSelectedTracks,
     } = useTimeline();
+
+    const tracksFromSelectedClips = project.clips.filter(c => selectedClipIds.includes(c.id)).map(c => c.trackId);
+    const activeSelectedTrackIds = Array.from(new Set([...selectedTrackIds, ...tracksFromSelectedClips]));
+    const activeSelectedTrackCount = activeSelectedTrackIds.length;
 
     const { songs, activeSongId, activeSong, addCustomStemToSong } = useSongLibrary();
 
     const [isMediaPoolOpen, setIsMediaPoolOpen] = useState(true);
     const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
     const [isMerging, setIsMerging] = useState(false);
+    const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+    const [projectModalMode, setProjectModalMode] = useState<'manage' | 'save-as' | 'open'>('manage');
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [containerWidth, setContainerWidth] = useState(1200);
@@ -48,6 +59,14 @@ export const TimelineWorkspace: React.FC<TimelineWorkspaceProps> = ({ onNavigate
         window.addEventListener('resize', updateWidth);
         return () => window.removeEventListener('resize', updateWidth);
     }, []);
+
+    // Periodic debounced auto-save session state
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            projectStorage.saveAutoSaveSession(project, songs);
+        }, 3000);
+        return () => clearTimeout(timer);
+    }, [project, songs]);
 
     // Auto-follow playhead if it is in frame and user hasn't scrolled away
     useEffect(() => {
@@ -147,18 +166,8 @@ export const TimelineWorkspace: React.FC<TimelineWorkspaceProps> = ({ onNavigate
                         isMediaPoolOpen ? 'w-64 sm:w-72' : 'w-0'
                     } overflow-hidden`}
                 >
-                    <MediaPool />
+                    <MediaPool onCollapse={() => setIsMediaPoolOpen(false)} />
                 </div>
-
-                {/* Media Pool Collapse Toggle Button */}
-                <button
-                    title={isMediaPoolOpen ? 'Collapse Media Pool' : 'Expand Media Pool'}
-                    onClick={() => setIsMediaPoolOpen(prev => !prev)}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-40 p-1.5 bg-zinc-900 border border-white/15 rounded-r-xl text-zinc-400 hover:text-white transition-all shadow-2xl cursor-pointer"
-                    style={{ left: isMediaPoolOpen ? (typeof window !== 'undefined' && window.innerWidth >= 640 ? '288px' : '256px') : '0px' }}
-                >
-                    {isMediaPoolOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                </button>
 
                 {/* Center / Main DAW Multi-Track Editor */}
                 <div className="flex-1 flex overflow-hidden bg-black/60 relative">
@@ -166,9 +175,22 @@ export const TimelineWorkspace: React.FC<TimelineWorkspaceProps> = ({ onNavigate
                     <div className="w-64 bg-zinc-950 border-r border-white/10 flex flex-col shrink-0 z-30 shadow-2xl overflow-hidden">
                         {/* Top Corner Header */}
                         <div className="h-8 bg-zinc-950 border-b border-white/10 px-3 flex items-center justify-between shrink-0">
-                            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                Tracks ({project.tracks.length})
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                                {!isMediaPoolOpen && (
+                                    <button
+                                        title="Expand Media Pool"
+                                        onClick={() => setIsMediaPoolOpen(true)}
+                                        className="p-1 -ml-1 rounded-md text-zinc-400 hover:text-yellow-400 hover:bg-white/10 transition-colors flex items-center gap-0.5 cursor-pointer"
+                                    >
+                                        <Disc className="w-3 h-3 text-yellow-400" />
+                                        <ChevronRight className="w-3 h-3" />
+                                    </button>
+                                )}
+                                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+                                    Tracks ({project.tracks.length})
+                                </span>
+                            </div>
+
                             <div className="flex items-center gap-1">
                                 <button
                                     title="Reset All Tracks to Defaults"
@@ -177,20 +199,42 @@ export const TimelineWorkspace: React.FC<TimelineWorkspaceProps> = ({ onNavigate
                                 >
                                     <RotateCcw className="w-3 h-3" />
                                 </button>
-                                {project.tracks.length >= 2 && (
+
+                                {/* Dynamic Header Merge Button */}
+                                {activeSelectedTrackCount >= 2 ? (
                                     <button
-                                        title="Merge Selected Tracks into 1"
-                                        onClick={() => setIsMergeModalOpen(true)}
-                                        className="p-1 rounded text-zinc-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-[10px] font-bold"
+                                        title={`Merge ${activeSelectedTrackCount} Selected Layers (Cmd+M)`}
+                                        onClick={() => mergeSelectedTracks()}
+                                        className="px-1.5 py-0.5 rounded bg-yellow-500/20 border border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/30 transition-all text-[10px] font-black flex items-center gap-1 shadow-[0_0_8px_rgba(250,204,21,0.25)] cursor-pointer"
                                     >
-                                        <SlidersHorizontal className="w-3 h-3" />
+                                        <Combine className="w-3 h-3 text-yellow-400" />
+                                        <span>{activeSelectedTrackCount}</span>
                                     </button>
+                                ) : (
+                                    project.tracks.length >= 2 && (
+                                        <button
+                                            title="Merge Selected Tracks into 1"
+                                            onClick={() => setIsMergeModalOpen(true)}
+                                            className="p-1 rounded text-zinc-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-[10px] font-bold cursor-pointer"
+                                        >
+                                            <SlidersHorizontal className="w-3 h-3" />
+                                        </button>
+                                    )
                                 )}
+
+                                <button
+                                    title="Project Manager (New, Save As, Open)"
+                                    onClick={() => { setProjectModalMode('manage'); setIsProjectModalOpen(true); }}
+                                    className="p-1 rounded text-zinc-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-[10px] font-bold cursor-pointer"
+                                >
+                                    <Folder className="w-3.5 h-3.5" />
+                                </button>
+
                                 {onNavigateToExport && (
                                     <button
                                         title="Export & Mixdown"
                                         onClick={onNavigateToExport}
-                                        className="p-1 rounded text-zinc-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-[10px] font-bold"
+                                        className="p-1 rounded text-zinc-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-[10px] font-bold cursor-pointer"
                                     >
                                         <Download className="w-3 h-3" />
                                     </button>
@@ -212,23 +256,34 @@ export const TimelineWorkspace: React.FC<TimelineWorkspaceProps> = ({ onNavigate
                                     <TimelineTrackHeader
                                         key={track.id}
                                         track={track}
-                                        isSelected={selectedTrackId === track.id}
-                                        onSelect={() => selectTrack(track.id)}
+                                        isSelected={activeSelectedTrackIds.includes(track.id)}
+                                        onSelect={(isMulti) => selectTrack(track.id, isMulti)}
                                     />
                                 ))}
                             </div>
 
                             {/* Bottom Pill-shaped Action Buttons */}
                             <div className="p-3 border-t border-white/5 bg-zinc-950/90 flex flex-col gap-2 shrink-0">
-                                {project.tracks.length >= 2 && (
+                                {activeSelectedTrackCount >= 2 ? (
                                     <button
-                                        title="Merge Selected Tracks into a New Layer"
-                                        onClick={() => setIsMergeModalOpen(true)}
-                                        className="w-full py-2 px-3 rounded-full border border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 active:scale-[0.98] transition-all text-xs font-bold flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(250,204,21,0.15)] cursor-pointer"
+                                        title={`Merge ${activeSelectedTrackCount} Selected Tracks into a New Audio Track (Cmd+M)`}
+                                        onClick={() => mergeSelectedTracks()}
+                                        className="w-full py-2 px-3 rounded-full border border-yellow-500 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-300 active:scale-[0.98] transition-all text-xs font-black flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(250,204,21,0.25)] cursor-pointer"
                                     >
-                                        <SlidersHorizontal className="w-3.5 h-3.5" />
-                                        <span>Merge Layers</span>
+                                        <Combine className="w-4 h-4 text-yellow-400 animate-pulse" />
+                                        <span>Merge {activeSelectedTrackCount} Selected Layers (Cmd+M)</span>
                                     </button>
+                                ) : (
+                                    project.tracks.length >= 2 && (
+                                        <button
+                                            title="Merge Selected Tracks into a New Layer"
+                                            onClick={() => setIsMergeModalOpen(true)}
+                                            className="w-full py-2 px-3 rounded-full border border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 active:scale-[0.98] transition-all text-xs font-bold flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(250,204,21,0.15)] cursor-pointer"
+                                        >
+                                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                                            <span>Merge Layers</span>
+                                        </button>
+                                    )
                                 )}
 
                                 <button
@@ -258,6 +313,12 @@ export const TimelineWorkspace: React.FC<TimelineWorkspaceProps> = ({ onNavigate
 
                         {/* Track Lanes Area */}
                         <div
+                            onClick={(e) => {
+                                if (e.target === e.currentTarget) {
+                                    selectClip(null);
+                                    selectTrack(null);
+                                }
+                            }}
                             className="relative flex-1"
                             style={{ width: `${timelineTotalWidth}px`, minHeight: `${project.tracks.length * 96 + 48}px` }}
                         >
@@ -275,8 +336,8 @@ export const TimelineWorkspace: React.FC<TimelineWorkspaceProps> = ({ onNavigate
                                     key={track.id}
                                     track={track}
                                     width={timelineTotalWidth}
-                                    isSelected={selectedTrackId === track.id}
-                                    onSelect={() => selectTrack(track.id)}
+                                    isSelected={selectedTrackIds.includes(track.id)}
+                                    onSelect={(isMulti) => selectTrack(track.id, isMulti)}
                                 />
                             ))}
                         </div>
@@ -296,6 +357,13 @@ export const TimelineWorkspace: React.FC<TimelineWorkspaceProps> = ({ onNavigate
                     defaultTargetSongId={activeSongId || (songs[0]?.id)}
                 />
             )}
+
+            {/* Custom Project Management Modal */}
+            <ProjectManagerModal
+                isOpen={isProjectModalOpen}
+                onClose={() => setIsProjectModalOpen(false)}
+                initialMode={projectModalMode}
+            />
         </div>
     );
 };

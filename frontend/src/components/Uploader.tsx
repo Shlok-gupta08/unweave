@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { UploadCloud, Cpu, Zap, Clock, AlertCircle, AlertTriangle } from 'lucide-react';
+import { UploadCloud, Cpu, Zap, Clock, AlertCircle, AlertTriangle, Sparkles } from 'lucide-react';
 import axios from 'axios';
 import { apiGet, apiPost, type ProcessingMode } from '../utils/api';
 import { saveBlobToDB } from '../utils/db';
+import { useProcessingMode } from '../context/ProcessingModeContext';
 import type { SeparationJob, JobStatus } from '../types';
 
 interface UploaderProps {
@@ -17,6 +18,7 @@ interface UploaderProps {
 }
 
 export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, onSessionExpired, onClearJob, resumeJobId, hasActiveSession, processingMode = 'cpu' }) => {
+    const { separationPasses, setSeparationPasses } = useProcessingMode();
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
@@ -29,7 +31,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
     const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
 
-    // ── Combined timer state for dual-pass processing ──
+    // ── Combined timer state for multi-pass processing ──
     const [passNumber, setPassNumber] = useState(1);
     const passNumberRef = useRef(1);
     const prevRawProgressRef = useRef(0);
@@ -69,26 +71,23 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                 const rawProgress = data.progress;
                 const rawEta = data.eta_seconds;
 
-                // ── Detect dual-pass processing ──
-                // If raw progress drops significantly, we've entered pass 2
-                if (prevRawProgressRef.current > 50 && rawProgress < 20 && passNumberRef.current === 1) {
-                    passNumberRef.current = 2;
-                    setPassNumber(2);
+                const totalPasses = separationPasses || 2;
+
+                // ── Detect multi-pass processing ──
+                if (prevRawProgressRef.current > 50 && rawProgress < 20 && passNumberRef.current < totalPasses) {
+                    passNumberRef.current += 1;
+                    setPassNumber(passNumberRef.current);
                 }
                 prevRawProgressRef.current = rawProgress;
 
                 // ── Compute combined progress & ETA ──
-                // Use ref (not state) so the polling closure always has the current pass
-                if (passNumberRef.current === 1) {
-                    // First pass: scale to 0–50% of total
-                    setCombinedProgress(Math.round(rawProgress / 2));
-                    // Double the ETA to account for the second pass
-                    setCombinedEta(rawEta !== null ? Math.round(rawEta * 2) : null);
-                } else {
-                    // Second pass: scale to 50–100% of total 
-                    setCombinedProgress(Math.round(50 + rawProgress / 2));
-                    setCombinedEta(rawEta);
-                }
+                const curPass = passNumberRef.current;
+                const completedPassesProgress = ((curPass - 1) / totalPasses) * 100;
+                const currentPassSlice = (rawProgress / totalPasses);
+                setCombinedProgress(Math.min(99, Math.round(completedPassesProgress + currentPassSlice)));
+
+                const remainingPasses = Math.max(1, totalPasses - curPass + 1);
+                setCombinedEta(rawEta !== null ? Math.round(rawEta * remainingPasses) : null);
 
                 setStatusMessage(data.message);
                 if (data.device_used) setDeviceUsed(data.device_used);
@@ -176,7 +175,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                         setError(data.message || 'Separation failed');
                     }
                     if (data.status === 'cancelled') {
-                        setCancelSuggestion('Processing cancelled. Try Standard (CPU) Mode for more consistent results.');
+                        setCancelSuggestion('Processing cancelled. Try Local Mode for more consistent results.');
                         onClearJob?.();
                     }
                 }
@@ -195,7 +194,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                     setPassNumber(1);
                     passNumberRef.current = 1;
                     prevRawProgressRef.current = 0;
-                    setError('GPU backend became unreachable during processing. Please switch to Standard (CPU) Mode.');
+                    setError('GPU backend became unreachable during processing. Please switch to Local Mode.');
                     onClearJob?.();
                     return;
                 }
@@ -257,6 +256,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
 
         const formData = new FormData();
         formData.append('file', selectedFile);
+        formData.append('shifts', String(separationPasses || 2));
 
         try {
             const response = await apiPost<{ job_id: string; message: string }>(
@@ -277,7 +277,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
             if (axios.isCancel(err) || (err instanceof DOMException && err.name === 'AbortError')) {
                 setIsUploading(false);
                 setIsCancelling(false);
-                setCancelSuggestion('Processing cancelled. Try Standard (CPU) Mode for more consistent results.');
+                setCancelSuggestion('Processing cancelled.');
                 return;
             }
             console.error(err);
@@ -286,7 +286,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
             if (axios.isAxiosError(err)) {
                 // GPU-specific: network error means the GPU backend is unreachable
                 if (processingMode === 'gpu' && !err.response) {
-                    setError('GPU backend is unreachable. Please switch to Standard (CPU) Mode or try again later.');
+                    setError('Turbo Cloud GPU is unreachable. Please switch to Local Mode or try again later.');
                 } else {
                     setError(err.response?.data?.error || 'Failed to upload audio.');
                 }
@@ -341,7 +341,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
         setCombinedProgress(0);
         setCombinedEta(null);
         prevRawProgressRef.current = 0;
-        setCancelSuggestion('Processing cancelled. Try Standard (CPU) Mode for more consistent results.');
+        setCancelSuggestion('Processing cancelled.');
         onClearJob?.();
     };
 
@@ -506,6 +506,49 @@ export const Uploader: React.FC<UploaderProps> = ({ onComplete, onJobStarted, on
                     </div>
                 )}
             </div>
+
+            {/* Multi-Pass Quality Passes Selector */}
+            {!isUploading && (
+                <div className="w-full max-w-3xl mx-auto mt-3 p-3 sm:p-4 backdrop-blur-2xl rounded-2xl sm:rounded-3xl bg-zinc-950/60 border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 sm:p-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 shrink-0">
+                            <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs sm:text-sm font-bold text-white tracking-tight">Separation Quality Mode</span>
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-yellow-400 text-black shadow-sm">
+                                    {separationPasses === 2 ? 'Good Quality' : separationPasses === 3 ? 'Better Quality' : 'Best Quality'}
+                                </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 mt-0.5 font-medium">
+                                {separationPasses === 2
+                                    ? '2 Passes — Standard fast separation (Ideal for quick workflow)'
+                                    : separationPasses === 3
+                                    ? '3 Passes — Deep spectral refinement (+35% time, cleaner stem isolation)'
+                                    : '4 Passes — Audiophile maximum precision (+75% time, ultra-clean zero bleed)'}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 bg-black/50 p-1.5 rounded-xl sm:rounded-2xl border border-white/10 shrink-0 w-full sm:w-auto justify-center">
+                        {([2, 3, 4] as const).map((pass) => (
+                            <button
+                                key={pass}
+                                type="button"
+                                onClick={() => setSeparationPasses(pass)}
+                                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                    separationPasses === pass
+                                        ? 'bg-yellow-500 text-black shadow-[0_0_12px_rgba(250,204,21,0.35)]'
+                                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                                }`}
+                            >
+                                {pass} Passes ({pass === 2 ? 'Good' : pass === 3 ? 'Better' : 'Best'})
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Custom Confirm Dialog */}
             {showConfirmDialog && (

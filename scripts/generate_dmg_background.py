@@ -9,69 +9,54 @@ def create_dmg_background(output_path):
     width = 1080
     height = 760
 
-    # Clean dark slate background
-    img = Image.new("RGBA", (width, height), (18, 18, 22, 255))
+    img = Image.new("RGB", (width, height), (15, 15, 18))
     draw = ImageDraw.Draw(img)
 
-    # Subtle vertical gradient overlay
+    # Smooth dark gradient
     for y in range(height):
-        factor = y / height
-        r = int(22 * (1 - factor) + 12 * factor)
-        g = int(22 * (1 - factor) + 12 * factor)
-        b = int(26 * (1 - factor) + 14 * factor)
-        draw.line([(0, y), (width, y)], fill=(r, g, b, 255))
+        f = y / height
+        r = int(20 * (1 - f) + 12 * f)
+        g = int(20 * (1 - f) + 12 * f)
+        b = int(24 * (1 - f) + 15 * f)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
 
-    # Subtle divider line in the center
-    center_x = width // 2
-    draw.line([(center_x, 80), (center_x, height - 80)], fill=(255, 255, 255, 18), width=1)
+    # Center arrow between icons (x: 430 to 650 in 2x coords, y=390)
+    y_center = 390
+    x_start = 430
+    x_end = 650
 
-    # Arrow pointing right — clean, simple, centered
-    arrow_y = height // 2
-    arrow_x1 = center_x - 60
-    arrow_x2 = center_x + 60
-    # Line
-    draw.line([(arrow_x1, arrow_y), (arrow_x2, arrow_y)], fill=(250, 204, 21, 200), width=4)
+    # Sleek amber/gold accent arrow
+    accent_color = (234, 179, 8, 220)
+    draw.line([(x_start, y_center), (x_end, y_center)], fill=accent_color, width=5)
+
     # Arrowhead
-    head = 18
+    head_len = 24
     draw.polygon([
-        (arrow_x2, arrow_y),
-        (arrow_x2 - head, arrow_y - head),
-        (arrow_x2 - head, arrow_y + head),
-    ], fill=(250, 204, 21, 200))
+        (x_end, y_center),
+        (x_end - head_len, y_center - 14),
+        (x_end - head_len, y_center + 14)
+    ], fill=accent_color)
 
-    # Try to load a system font
-    font_title = None
-    font_sub = None
+    # Header font
+    font = None
     for fp in [
         "/System/Library/Fonts/Helvetica.ttc",
         "/System/Library/Fonts/SFPro-Bold.otf",
-        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
     ]:
         if os.path.exists(fp):
             try:
-                font_title = ImageFont.truetype(fp, 34)
-                font_sub = ImageFont.truetype(fp, 18)
+                font = ImageFont.truetype(fp, 36)
                 break
             except Exception:
-                continue
-    if not font_title:
-        font_title = ImageFont.load_default()
-        font_sub = ImageFont.load_default()
+                pass
+    if not font:
+        font = ImageFont.load_default()
 
-    # Top title
-    draw.text((width // 2, 60), "Unweave Studio", fill=(255, 255, 255, 220), font=font_title, anchor="mm")
-    draw.text((width // 2, 100), "Drag Unweave into Applications to install", fill=(150, 150, 160, 200), font=font_sub, anchor="mm")
-
-    # Left label — App
-    draw.text((270, height - 100), "Unweave", fill=(200, 200, 210, 180), font=font_sub, anchor="mm")
-    # Right label — Applications
-    draw.text((810, height - 100), "Applications", fill=(200, 200, 210, 180), font=font_sub, anchor="mm")
-
-    # Thin top border
-    draw.line([(0, 0), (width, 0)], fill=(255, 255, 255, 30), width=2)
+    draw.text((width // 2, 90), "Drag to Applications to Install", fill=(220, 220, 225), font=font, anchor="mm")
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    img.convert("RGB").save(output_path, "PNG")
+    img.save(output_path, "PNG")
     print(f"✅ Generated clean DMG background at {output_path}")
 
 if __name__ == "__main__":

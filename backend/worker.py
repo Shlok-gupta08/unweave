@@ -1,38 +1,64 @@
 import os
 import sys
 
-# Auto-activate virtual environment if run directly with system Python
+# Auto-activate virtual environment or embedded framework if run directly
 try:
     from audio_separator.separator import Separator
 except ImportError:
     _script_dir = os.path.dirname(os.path.abspath(__file__))
+    _embedded_py = os.path.join(_script_dir, "python", "Frameworks", "Python.framework", "Versions", "3.11", "bin", "python3.11")
     _venv_bin = os.path.join(_script_dir, ".venv", "bin" if sys.platform != "win32" else "Scripts")
     _venv_python = os.path.join(_venv_bin, "python" + (".exe" if sys.platform == "win32" else ""))
-    if os.path.exists(_venv_python):
+    
+    if os.path.exists(_embedded_py):
+        _site_pkg = os.path.join(_script_dir, "python", "lib", "python3.11", "site-packages")
+        os.environ["PYTHONPATH"] = f"{_site_pkg}:{_script_dir}"
+        os.environ["PYTHONHOME"] = os.path.join(_script_dir, "python", "Frameworks", "Python.framework", "Versions", "3.11")
+        os.execv(_embedded_py, [_embedded_py] + sys.argv)
+    elif os.path.exists(_venv_python):
         os.execv(_venv_python, [_venv_python] + sys.argv)
     else:
-        print("Error: audio-separator is not installed and no virtual environment was found at backend/.venv.", file=sys.stderr)
+        print("Error: audio-separator is not installed and no Python runtime was found.", file=sys.stderr)
         sys.exit(1)
 
 import argparse
+import shutil
 
-# FFmpeg PATH Fix (Windows)
+# FFmpeg PATH Auto-Discovery (Static imageio_ffmpeg + Bundled bin + System)
+try:
+    import imageio_ffmpeg
+    _ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    if _ffmpeg_exe and os.path.exists(_ffmpeg_exe):
+        _ffmpeg_dir = os.path.dirname(_ffmpeg_exe)
+        _std_ffmpeg = os.path.join(_ffmpeg_dir, "ffmpeg")
+        if not os.path.exists(_std_ffmpeg):
+            try:
+                os.symlink(_ffmpeg_exe, _std_ffmpeg)
+            except Exception:
+                shutil.copy2(_ffmpeg_exe, _std_ffmpeg)
+        os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
+except Exception:
+    pass
+
+_ffmpeg_search_dirs = [
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bin"),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/opt/local/bin",
+]
 if sys.platform == "win32":
-    try:
-        import subprocess as _sp
-        _sp.check_output(["ffmpeg", "-version"], stderr=_sp.DEVNULL)
-    except FileNotFoundError:
-        _ffmpeg_search_dirs = [
-            os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Links"),
-            os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Packages"),
-            os.path.join(os.environ.get("ProgramFiles", ""), "ffmpeg", "bin"),
-            os.path.join(os.environ.get("ProgramFiles(x86)", ""), "ffmpeg", "bin"),
-        ]
-        for _dir in _ffmpeg_search_dirs:
-            if os.path.isdir(_dir) and any(f.lower().startswith("ffmpeg") for f in os.listdir(_dir)):
-                os.environ["PATH"] = _dir + os.pathsep + os.environ.get("PATH", "")
-                print(f"worker: Added ffmpeg to PATH from: {_dir}", file=sys.stderr)
-                break
+    _ffmpeg_search_dirs.extend([
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Links"),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Packages"),
+        os.path.join(os.environ.get("ProgramFiles", ""), "ffmpeg", "bin"),
+        os.path.join(os.environ.get("ProgramFiles(x86)", ""), "ffmpeg", "bin"),
+    ])
+
+for _dir in _ffmpeg_search_dirs:
+    if os.path.isdir(_dir) and any(f.lower().startswith("ffmpeg") for f in os.listdir(_dir)):
+        os.environ["PATH"] = _dir + os.pathsep + os.environ.get("PATH", "")
+        break
 
 def run_worker():
     parser = argparse.ArgumentParser()
@@ -41,9 +67,10 @@ def run_worker():
     parser.add_argument("--out_dir", required=True)
     parser.add_argument("--device_type", required=True)
     parser.add_argument("--models_dir", required=True)
+    parser.add_argument("--shifts", type=int, default=2)
     args = parser.parse_args()
 
-    print("worker: Loading model...", file=sys.stderr)
+    print(f"worker: Loading model (shifts={args.shifts})...", file=sys.stderr)
     
     # Limit PyTorch CPU threads to avoid severe contention on low-resource environments (like Azure Container Apps)
     # which can cause the process to hang at "0% / Calculating".
@@ -68,6 +95,7 @@ def run_worker():
             "output_format": "mp3",
             "model_file_dir": args.models_dir,
             "model_name": "htdemucs_6s.yaml",
+            "demucs_shifts": args.shifts,
             "log_level": 10,
         }
         if args.device_type == "mps":
@@ -85,6 +113,7 @@ def run_worker():
             "output_dir": args.out_dir,
             "output_format": "mp3",
             "model_file_dir": args.models_dir,
+            "demucs_shifts": args.shifts,
             "log_level": 10,
         }
         if args.device_type == "directml":

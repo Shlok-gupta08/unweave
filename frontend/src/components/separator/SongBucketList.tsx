@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Trash2, CheckCircle2, AlertCircle, X, Search, Sparkles, Layers, Loader2 } from 'lucide-react';
+import { Play, Trash2, CheckCircle2, AlertCircle, X, Search, Sparkles, Layers, Loader2, RotateCcw } from 'lucide-react';
 import { useSongLibrary } from '../../context/SongLibraryContext';
 import { useTimeline } from '../../context/TimelineContext';
 import type { SongItem } from '../../types';
@@ -10,13 +10,18 @@ interface SongBucketListProps {
 }
 
 export const SongBucketList: React.FC<SongBucketListProps> = ({ onSelectSong, onOpenInTimeline }) => {
-    const { songs, activeSongId, processSong, cancelProcessing, removeSong, processAllQueued, isBatchProcessing } = useSongLibrary();
+    const { songs, activeSongId, reprocessSong, cancelProcessing, removeSong, processAllQueued, isBatchProcessing } = useSongLibrary();
     const { loadSongStemsToTimeline } = useTimeline();
     const [searchQuery, setSearchQuery] = useState('');
     const [loadingSongId, setLoadingSongId] = useState<string | null>(null);
 
     const filteredSongs = songs.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
-    const queuedCount = songs.filter(s => s.status === 'queued' || s.status === 'error' || s.status === 'cancelled').length;
+    const queuedCount = songs.filter(s => s.status === 'idle' || s.status === 'queued' || s.status === 'error' || s.status === 'cancelled').length;
+
+    const handleReprocessClick = (e: React.MouseEvent, song: SongItem) => {
+        e.stopPropagation();
+        reprocessSong(song.id);
+    };
 
     const handleSendToTimeline = async (e: React.MouseEvent, song: SongItem) => {
         e.stopPropagation();
@@ -94,6 +99,8 @@ export const SongBucketList: React.FC<SongBucketListProps> = ({ onSelectSong, on
                     filteredSongs.map((song) => {
                         const isSelected = activeSongId === song.id;
                         const isProcessing = song.status === 'uploading' || song.status === 'processing';
+                        const isQueued = song.status === 'queued';
+                        const isInFlight = isProcessing || isQueued;
                         const isComplete = song.status === 'complete';
                         const isError = song.status === 'error';
 
@@ -112,6 +119,7 @@ export const SongBucketList: React.FC<SongBucketListProps> = ({ onSelectSong, on
                                         <div className="flex items-center gap-1.5">
                                             {isComplete && <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" />}
                                             {isProcessing && <div className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse shrink-0" />}
+                                            {isQueued && <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0" />}
                                             {isError && <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />}
                                             <h4 className="text-xs sm:text-sm font-bold text-white truncate tracking-tight">
                                                 {song.name}
@@ -140,39 +148,49 @@ export const SongBucketList: React.FC<SongBucketListProps> = ({ onSelectSong, on
                                     </div>
 
                                     {/* Action Buttons */}
-                                    <div className="flex items-center gap-1 shrink-0">
+                                    <div className="flex items-center gap-1.5 shrink-0">
                                          {isComplete && (
                                              <button
                                                  title="Open in Timeline Editor"
                                                  onClick={(e) => handleSendToTimeline(e, song)}
                                                  disabled={loadingSongId === song.id}
-                                                 className="p-1.5 rounded-lg bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500 hover:text-black transition-colors disabled:opacity-75 disabled:cursor-wait"
+                                                 className="px-2.5 py-1 rounded-lg bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500 hover:text-black transition-colors disabled:opacity-75 disabled:cursor-wait text-[11px] font-semibold flex items-center gap-1"
                                              >
                                                  {loadingSongId === song.id ? (
                                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                                  ) : (
                                                      <Layers className="w-3.5 h-3.5" />
                                                  )}
+                                                 <span>Open</span>
                                              </button>
                                          )}
 
-                                        {isProcessing || song.status === 'queued' ? (
-                                            <button
-                                                title="Cancel Separation"
-                                                onClick={(e) => { e.stopPropagation(); cancelProcessing(song.id); }}
-                                                className="p-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        ) : !isComplete ? (
-                                            <button
-                                                title="Start Separation"
-                                                onClick={(e) => { e.stopPropagation(); processSong(song.id); }}
-                                                className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-yellow-500 hover:text-black transition-colors"
-                                            >
-                                                <Play className="w-3.5 h-3.5" />
-                                            </button>
-                                        ) : null}
+                                         {isInFlight ? (
+                                             <button
+                                                 title={isQueued ? "Cancel / Remove from Queue" : "Cancel Separation"}
+                                                 onClick={(e) => { e.stopPropagation(); cancelProcessing(song.id); }}
+                                                 className="p-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer"
+                                             >
+                                                 <X className="w-3.5 h-3.5" />
+                                             </button>
+                                         ) : !isComplete ? (
+                                             <button
+                                                 title="Separate Stems for this song"
+                                                 onClick={(e) => handleReprocessClick(e, song)}
+                                                 className="px-2.5 py-1 rounded-lg bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-black font-bold text-[11px] transition-all shadow-[0_0_10px_rgba(250,204,21,0.25)] flex items-center gap-1 cursor-pointer"
+                                             >
+                                                 <Play className="w-3 h-3 fill-black" />
+                                                 <span>Separate</span>
+                                             </button>
+                                         ) : (
+                                             <button
+                                                 title="Reprocess / Re-separate Stems"
+                                                 onClick={(e) => handleReprocessClick(e, song)}
+                                                 className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-400 hover:bg-white/10 transition-colors cursor-pointer"
+                                             >
+                                                 <RotateCcw className="w-3.5 h-3.5" />
+                                             </button>
+                                         )}
 
                                         <button
                                             title="Delete Song"
@@ -198,6 +216,7 @@ export const SongBucketList: React.FC<SongBucketListProps> = ({ onSelectSong, on
                     })
                 )}
             </div>
+
         </div>
     );
 };

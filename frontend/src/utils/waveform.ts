@@ -1,4 +1,5 @@
 import { resolveStemUrl } from './api';
+import { projectStorage } from '../services/projectStorage';
 
 /**
  * Waveform extraction and Canvas rendering utilities for DAW Timeline clips.
@@ -44,7 +45,8 @@ export function extractPeaks(audioBuffer: AudioBuffer, numPeaks = 1000): number[
 }
 
 /**
- * Fetches and decodes an audio file into an AudioBuffer, utilizing the memory cache.
+ * Fetches and decodes an audio file into an AudioBuffer, utilizing the memory cache
+ * with automatic fallback to persistent IndexedDB projectStorage if the URL expired.
  */
 export async function getOrFetchAudioBuffer(
     url: string,
@@ -54,12 +56,39 @@ export async function getOrFetchAudioBuffer(
         return audioBufferCache.get(url)!;
     }
 
-    const resolvedUrl = resolveStemUrl(url);
     const ctx = audioContext || new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const response = await fetch(resolvedUrl);
-    const arrayBuffer = await response.arrayBuffer();
-    const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
+    let arrayBuffer: ArrayBuffer | null = null;
 
+    try {
+        const resolvedUrl = resolveStemUrl(url);
+        const response = await fetch(resolvedUrl);
+        if (response.ok) {
+            arrayBuffer = await response.arrayBuffer();
+        }
+    } catch {
+        // Network/blob failure, try fallback from persistent IndexedDB
+    }
+
+    if (!arrayBuffer) {
+        // Try fallback from IndexedDB / project storage
+        try {
+            const fallbackUrl = await projectStorage.getStemAudioUrl(url);
+            if (fallbackUrl) {
+                const fbRes = await fetch(fallbackUrl);
+                if (fbRes.ok) {
+                    arrayBuffer = await fbRes.arrayBuffer();
+                }
+            }
+        } catch (err) {
+            console.warn('[Waveform] Failed to load audio from persistent cache fallback:', err);
+        }
+    }
+
+    if (!arrayBuffer) {
+        throw new Error(`Failed to fetch and decode audio buffer for URL: ${url}`);
+    }
+
+    const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
     audioBufferCache.set(url, decodedBuffer);
     return decodedBuffer;
 }

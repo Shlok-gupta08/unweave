@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Scissors, Copy, Trash2, Volume2 } from 'lucide-react';
-import { drawWaveformToCanvas } from '../../utils/waveform';
+import { drawWaveformToCanvas, getOrComputePeaks } from '../../utils/waveform';
 import { useTimeline } from '../../context/TimelineContext';
 import type { TimelineClip } from '../../types';
 
@@ -8,7 +8,7 @@ interface TimelineClipViewProps {
     clip: TimelineClip;
     zoom: number;
     isSelected: boolean;
-    onSelect: () => void;
+    onSelect: (isMulti?: boolean) => void;
 }
 
 export const TimelineClipView: React.FC<TimelineClipViewProps> = ({
@@ -22,6 +22,7 @@ export const TimelineClipView: React.FC<TimelineClipViewProps> = ({
 
     const [isHovered, setIsHovered] = useState(false);
     const [showGainSlider, setShowGainSlider] = useState(false);
+    const [computedPeaks, setComputedPeaks] = useState<number[] | null>(clip.peaks && clip.peaks.length > 0 ? clip.peaks : null);
 
     // Interaction drag states
     const isDraggingBody = useRef(false);
@@ -35,6 +36,27 @@ export const TimelineClipView: React.FC<TimelineClipViewProps> = ({
     const clipLeft = clip.startTime * zoom;
     const clipWidth = Math.max(20, clip.duration * zoom);
 
+    // Fallback compute peaks if missing
+    useEffect(() => {
+        if (clip.peaks && clip.peaks.length > 0) {
+            setComputedPeaks(clip.peaks);
+            return;
+        }
+
+        let isMounted = true;
+        getOrComputePeaks(clip.audioUrl).then((peaks) => {
+            if (isMounted && peaks && peaks.length > 0) {
+                setComputedPeaks(peaks);
+            }
+        }).catch((err) => {
+            console.warn('[TimelineClipView] Dynamic peaks computation fallback warning:', err);
+        });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [clip.peaks, clip.audioUrl]);
+
     // Render Canvas Waveform
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -47,8 +69,9 @@ export const TimelineClipView: React.FC<TimelineClipViewProps> = ({
         canvas.width = Math.max(20, Math.floor(clipWidth));
         canvas.height = 48;
 
-        if (clip.peaks) {
-            drawWaveformToCanvas(canvas, clip.peaks, clip.color, {
+        const activePeaks = computedPeaks || clip.peaks;
+        if (activePeaks && activePeaks.length > 0) {
+            drawWaveformToCanvas(canvas, activePeaks, clip.color, {
                 startRatio,
                 endRatio,
                 gain: clip.gain,
@@ -56,7 +79,7 @@ export const TimelineClipView: React.FC<TimelineClipViewProps> = ({
                 barGap: 1,
             });
         }
-    }, [clip.peaks, clip.color, clip.offset, clip.duration, clip.originalDuration, clip.gain, clipWidth]);
+    }, [computedPeaks, clip.peaks, clip.color, clip.offset, clip.duration, clip.originalDuration, clip.gain, clipWidth]);
 
     const snapTime = useCallback((time: number): number => {
         if (!project.isSnappingEnabled) return time;
@@ -68,7 +91,8 @@ export const TimelineClipView: React.FC<TimelineClipViewProps> = ({
     const handleBodyPointerDown = (e: React.PointerEvent) => {
         if ((e.target as HTMLElement).closest('.trim-handle, .clip-action')) return;
         e.stopPropagation();
-        onSelect();
+        const isMulti = e.metaKey || e.ctrlKey || e.shiftKey;
+        onSelect(isMulti);
 
         isDraggingBody.current = true;
         dragStartX.current = e.clientX;
@@ -183,13 +207,13 @@ export const TimelineClipView: React.FC<TimelineClipViewProps> = ({
             }}
         >
             {/* Top Badge & Action Toolbar */}
-            <div className="flex items-center justify-between px-2 py-1 bg-black/40 border-b border-white/5 text-[10px] pointer-events-auto">
-                <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center justify-between px-2 py-1 bg-black/40 border-b border-white/5 text-[10px] pointer-events-auto relative">
+                <div className="sticky left-1 inline-flex items-center gap-1.5 min-w-0 bg-zinc-900/90 border border-white/10 px-1.5 py-0.5 rounded-md backdrop-blur-md shadow-md z-10">
                     <span
                         className="w-2 h-2 rounded-full shrink-0"
                         style={{ backgroundColor: clip.color }}
                     />
-                    <span className="font-bold text-white truncate max-w-[120px]">{clip.stemName}</span>
+                    <span className="font-bold text-white truncate max-w-[140px] tracking-tight">{clip.stemName}</span>
                     <span className="text-zinc-400 text-[9px]">({clip.duration.toFixed(1)}s)</span>
                 </div>
 
@@ -228,7 +252,7 @@ export const TimelineClipView: React.FC<TimelineClipViewProps> = ({
                         </div>
 
                         <button
-                            title="Split Clip at Playhead (S)"
+                            title="Split Clip at Playhead (Cmd+B)"
                             onClick={(e) => { e.stopPropagation(); splitClipAtPlayhead(clip.id); }}
                             className="p-1 rounded text-zinc-400 hover:text-yellow-400 hover:bg-yellow-500/10 transition-colors"
                         >

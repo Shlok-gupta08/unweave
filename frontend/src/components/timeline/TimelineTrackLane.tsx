@@ -7,7 +7,7 @@ interface TimelineTrackLaneProps {
     track: TimelineTrack;
     width: number;
     isSelected: boolean;
-    onSelect: () => void;
+    onSelect: (isMultiSelect?: boolean) => void;
 }
 
 export const TimelineTrackLane: React.FC<TimelineTrackLaneProps> = ({
@@ -16,16 +16,19 @@ export const TimelineTrackLane: React.FC<TimelineTrackLaneProps> = ({
     isSelected,
     onSelect,
 }) => {
-    const { project, selectedClipId, selectClip, addClip, seek } = useTimeline();
+    const { project, selectedClipId, selectedClipIds, selectClip, addClip, seek } = useTimeline();
     const [isDragOver, setIsDragOver] = useState(false);
 
     const zoom = project.zoom;
     const trackClips = project.clips.filter(c => c.trackId === track.id);
 
     const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        onSelect();
         const target = e.target as HTMLElement;
         if (target === e.currentTarget || target.dataset.role === 'lane-bg') {
+            // Clicking empty space in lane deselects clips
+            selectClip(null);
+            const isMulti = e.metaKey || e.ctrlKey || e.shiftKey;
+            onSelect(isMulti);
             const rect = e.currentTarget.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
             const time = Math.max(0, clickX / zoom);
@@ -100,8 +103,8 @@ export const TimelineTrackLane: React.FC<TimelineTrackLaneProps> = ({
                     key={clip.id}
                     clip={clip}
                     zoom={zoom}
-                    isSelected={selectedClipId === clip.id}
-                    onSelect={() => selectClip(clip.id)}
+                    isSelected={selectedClipIds.includes(clip.id) || selectedClipId === clip.id}
+                    onSelect={(isMulti) => selectClip(clip.id, isMulti)}
                 />
             ))}
         </div>

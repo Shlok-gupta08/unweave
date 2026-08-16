@@ -3,12 +3,17 @@ import axios from 'axios';
 import { isGpuAvailable, checkGpuHealth, getBaseUrl, type ProcessingMode } from '../utils/api';
 
 const STORAGE_KEY = 'unweave_processing_mode';
+const PASSES_STORAGE_KEY = 'unweave_separation_passes';
 
 type GpuStatus = 'unchecked' | 'checking' | 'online' | 'offline';
+
+export type SeparationPasses = 1 | 2 | 3 | 4;
 
 interface ProcessingModeContextValue {
     processingMode: ProcessingMode;
     setProcessingMode: (mode: ProcessingMode) => void;
+    separationPasses: SeparationPasses;
+    setSeparationPasses: (passes: SeparationPasses) => void;
     gpuAvailable: boolean;
     gpuStatus: GpuStatus;
     recheckGpuHealth: () => Promise<void>;
@@ -21,6 +26,8 @@ interface ProcessingModeContextValue {
 const ProcessingModeContext = createContext<ProcessingModeContextValue>({
     processingMode: 'cpu',
     setProcessingMode: () => { },
+    separationPasses: 2,
+    setSeparationPasses: () => { },
     gpuAvailable: false,
     gpuStatus: 'unchecked',
     recheckGpuHealth: async () => { },
@@ -125,10 +132,33 @@ export function ProcessingModeProvider({ children }: { children: ReactNode }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const [separationPasses, setSeparationPassesState] = useState<SeparationPasses>(() => {
+        try {
+            const saved = localStorage.getItem(PASSES_STORAGE_KEY);
+            if (saved === '1' || saved === '2' || saved === '3' || saved === '4') {
+                return Number(saved) as SeparationPasses;
+            }
+        } catch {
+            // localStorage unavailable
+        }
+        return 2;
+    });
+
+    const setSeparationPasses = useCallback((passes: SeparationPasses) => {
+        setSeparationPassesState(passes);
+        try {
+            localStorage.setItem(PASSES_STORAGE_KEY, String(passes));
+        } catch {
+            // localStorage unavailable
+        }
+    }, []);
+
     return (
         <ProcessingModeContext.Provider value={{
             processingMode,
             setProcessingMode,
+            separationPasses,
+            setSeparationPasses,
             gpuAvailable,
             gpuStatus,
             recheckGpuHealth,

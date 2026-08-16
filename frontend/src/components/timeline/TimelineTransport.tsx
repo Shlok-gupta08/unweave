@@ -1,7 +1,7 @@
 import React from 'react';
 import {
     Play, Pause, SkipBack, Repeat, Scissors, Plus,
-    Magnet, ZoomIn, ZoomOut, Undo2, Redo2, SlidersHorizontal
+    Magnet, ZoomIn, ZoomOut, Undo2, Redo2, SlidersHorizontal, Combine
 } from 'lucide-react';
 import { useTimeline } from '../../context/TimelineContext';
 
@@ -14,6 +14,8 @@ export const TimelineTransport: React.FC<TimelineTransportProps> = ({ onOpenMerg
         isPlaying,
         playheadTime,
         project,
+        selectedTrackIds,
+        selectedClipIds,
         togglePlay,
         seek,
         toggleLoop,
@@ -22,13 +24,16 @@ export const TimelineTransport: React.FC<TimelineTransportProps> = ({ onOpenMerg
         setZoom,
         addTrack,
         splitClipAtPlayhead,
+        mergeSelectedTracks,
         undo,
         redo,
         canUndo,
         canRedo,
-        vuMeterLevels,
         setMasterVolume,
     } = useTimeline();
+
+    const tracksFromSelectedClips = project.clips.filter(c => selectedClipIds.includes(c.id)).map(c => c.trackId);
+    const activeSelectedTrackCount = Array.from(new Set([...selectedTrackIds, ...tracksFromSelectedClips])).length;
 
     const formatPreciseTimecode = (seconds: number): string => {
         const mins = Math.floor(seconds / 60);
@@ -52,7 +57,7 @@ export const TimelineTransport: React.FC<TimelineTransportProps> = ({ onOpenMerg
                 {/* Undo / Redo */}
                 <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5">
                     <button
-                        title="Undo (Ctrl+Z)"
+                        title="Undo (Ctrl+Z / Cmd+Z)"
                         onClick={undo}
                         disabled={!canUndo}
                         className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
@@ -60,7 +65,7 @@ export const TimelineTransport: React.FC<TimelineTransportProps> = ({ onOpenMerg
                         <Undo2 className="w-4 h-4" />
                     </button>
                     <button
-                        title="Redo (Ctrl+Y)"
+                        title="Redo (Ctrl+Y / Cmd+Shift+Z)"
                         onClick={redo}
                         disabled={!canRedo}
                         className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
@@ -71,7 +76,7 @@ export const TimelineTransport: React.FC<TimelineTransportProps> = ({ onOpenMerg
 
                 {/* Split Clip Tool */}
                 <button
-                    title="Split Selected Clip at Playhead (S)"
+                    title="Split Clip at Playhead (Cmd+B)"
                     onClick={() => splitClipAtPlayhead()}
                     className="p-1.5 rounded-xl border border-white/10 hover:bg-white/10 hover:text-yellow-400 text-zinc-400 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
                 >
@@ -80,16 +85,27 @@ export const TimelineTransport: React.FC<TimelineTransportProps> = ({ onOpenMerg
                 </button>
 
                 {/* Merge Layers Button (Directly next to Split) */}
-                {onOpenMergeModal && (
+                {activeSelectedTrackCount >= 2 ? (
                     <button
-                        title="Merge Selected Tracks into a New Layer"
-                        onClick={onOpenMergeModal}
-                        disabled={project.tracks.length < 2}
-                        className="px-2.5 py-1.5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 hover:text-yellow-200 transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_12px_rgba(250,204,21,0.15)]"
+                        title={`Merge ${activeSelectedTrackCount} Selected Layers (Cmd+M)`}
+                        onClick={() => mergeSelectedTracks()}
+                        className="px-2.5 py-1.5 rounded-xl border border-yellow-400 bg-yellow-500/25 hover:bg-yellow-500/35 text-yellow-300 transition-all text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-[0_0_15px_rgba(250,204,21,0.3)] animate-pulse"
                     >
-                        <SlidersHorizontal className="w-3.5 h-3.5" />
-                        <span>Merge Layers</span>
+                        <Combine className="w-3.5 h-3.5 text-yellow-400" />
+                        <span>Merge {activeSelectedTrackCount} Selected (Cmd+M)</span>
                     </button>
+                ) : (
+                    onOpenMergeModal && (
+                        <button
+                            title="Merge Tracks (Select 2+ layers to quick-merge with Cmd+M)"
+                            onClick={onOpenMergeModal}
+                            disabled={project.tracks.length < 2}
+                            className="px-2.5 py-1.5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 hover:text-yellow-200 transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_12px_rgba(250,204,21,0.15)]"
+                        >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            <span>Merge Layers</span>
+                        </button>
+                    )
                 )}
 
                 {/* Add Audio Track Button */}
@@ -138,7 +154,7 @@ export const TimelineTransport: React.FC<TimelineTransportProps> = ({ onOpenMerg
                 </button>
             </div>
 
-            {/* Right Section: Snapping + Zoom + Stereo VU Meter */}
+            {/* Right Section: Snapping + Zoom + Master Volume */}
             <div className="flex items-center gap-3">
                 {/* Snapping Controls */}
                 <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-0.5">
@@ -194,38 +210,19 @@ export const TimelineTransport: React.FC<TimelineTransportProps> = ({ onOpenMerg
                     </button>
                 </div>
 
-                {/* Master Volume Slider & Stereo Peak VU Meter */}
-                <div className="flex items-center gap-2 bg-black/60 border border-white/10 rounded-xl px-2.5 py-1.5 shadow-inner">
-                    <div className="flex items-center gap-1">
-                        <span className="text-[9px] font-bold text-zinc-500 uppercase">VOL</span>
-                        <input
-                            type="range"
-                            min="0"
-                            max="1.5"
-                            step="0.01"
-                            value={project.masterVolume ?? 1.0}
-                            onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
-                            className="w-14 sm:w-18 h-1 accent-yellow-400 bg-white/10 rounded cursor-pointer"
-                            title={`Master Volume: ${Math.round((project.masterVolume ?? 1.0) * 100)}%`}
-                        />
-                    </div>
-
-                    <div className="flex flex-col gap-1 w-10 sm:w-14 border-l border-white/10 pl-1.5">
-                        {/* L Channel */}
-                        <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-gradient-to-r from-green-400 via-yellow-400 to-red-500 transition-all duration-75"
-                                style={{ width: `${Math.min(100, vuMeterLevels.left * (project.masterVolume ?? 1.0) * 100)}%` }}
-                            />
-                        </div>
-                        {/* R Channel */}
-                        <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-gradient-to-r from-green-400 via-yellow-400 to-red-500 transition-all duration-75"
-                                style={{ width: `${Math.min(100, vuMeterLevels.right * (project.masterVolume ?? 1.0) * 100)}%` }}
-                            />
-                        </div>
-                    </div>
+                {/* Master Volume Slider (Clean, No Extra Meter Lines) */}
+                <div className="flex items-center gap-1.5 bg-black/60 border border-white/10 rounded-xl px-2.5 py-1.5 shadow-inner">
+                    <span className="text-[9px] font-bold text-zinc-500 uppercase">VOL</span>
+                    <input
+                        type="range"
+                        min="0"
+                        max="1.5"
+                        step="0.01"
+                        value={project.masterVolume ?? 1.0}
+                        onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
+                        className="w-16 sm:w-20 h-1 accent-yellow-400 bg-white/10 rounded cursor-pointer"
+                        title={`Master Volume: ${Math.round((project.masterVolume ?? 1.0) * 100)}%`}
+                    />
                 </div>
             </div>
         </div>

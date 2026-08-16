@@ -6,7 +6,7 @@ interface TimelineRulerProps {
 }
 
 export const TimelineRuler: React.FC<TimelineRulerProps> = ({ width }) => {
-    const { project, playheadTime, seek } = useTimeline();
+    const { project, playheadTime, seek, selectClip } = useTimeline();
     const rulerRef = useRef<HTMLDivElement>(null);
     const isDraggingRef = useRef(false);
 
@@ -42,6 +42,7 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = ({ width }) => {
 
     const handlePointerDown = (e: React.PointerEvent) => {
         if (!rulerRef.current) return;
+        selectClip(null);
         isDraggingRef.current = true;
         rulerRef.current.setPointerCapture(e.pointerId);
 
