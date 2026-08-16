@@ -129,6 +129,23 @@ elif [ -f "/opt/homebrew/bin/ffmpeg" ]; then
     cp "/opt/homebrew/bin/ffmpeg" "$BACKEND_APP_DIR/bin/ffmpeg" 2>/dev/null || true
 fi
 
+# Relink Python executable to use embedded framework relative path for 100% portable execution on any Mac
+PY_BIN="$BACKEND_APP_DIR/python/Frameworks/Python.framework/Versions/3.11/bin/python3.11"
+PY_FRAMEWORK_LIB="$BACKEND_APP_DIR/python/Frameworks/Python.framework/Versions/3.11/Python"
+
+if [ -f "$PY_BIN" ]; then
+    chmod +w "$PY_BIN" 2>/dev/null || true
+    CURRENT_PY_LINK=$(otool -L "$PY_BIN" | grep "Cellar.*Python" | awk '{print $1}' || true)
+    if [ -n "$CURRENT_PY_LINK" ]; then
+        install_name_tool -change "$CURRENT_PY_LINK" "@executable_path/../Python" "$PY_BIN" 2>/dev/null || true
+    fi
+fi
+
+if [ -f "$PY_FRAMEWORK_LIB" ]; then
+    chmod +w "$PY_FRAMEWORK_LIB" 2>/dev/null || true
+    install_name_tool -id "@rpath/Python.framework/Versions/3.11/Python" "$PY_FRAMEWORK_LIB" 2>/dev/null || true
+fi
+
 echo -e "  ${GREEN}✅ Standalone Python AI backend & FFmpeg embedded into app bundle${NC}"
 
 echo -e "  ${GREEN}✅ $APP_NAME.app bundle assembled successfully${NC}"

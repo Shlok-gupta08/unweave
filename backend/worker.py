@@ -1,32 +1,41 @@
 import os
 import sys
 
-# Auto-activate virtual environment or embedded framework if run directly
+# Auto-activate Python 3.11 virtual environment or embedded framework if run under wrong interpreter
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_embedded_py = os.path.join(_script_dir, "python", "Frameworks", "Python.framework", "Versions", "3.11", "bin", "python3.11")
+_venv_bin = os.path.join(_script_dir, ".venv", "bin" if sys.platform != "win32" else "Scripts")
+_venv_python = os.path.join(_venv_bin, "python" + (".exe" if sys.platform == "win32" else ""))
+
+if os.path.exists(_embedded_py) and os.path.realpath(sys.executable) != os.path.realpath(_embedded_py):
+    _site_pkg = os.path.join(_script_dir, "python", "lib", "python3.11", "site-packages")
+    os.environ["PYTHONPATH"] = f"{_site_pkg}:{_script_dir}"
+    os.environ["PYTHONHOME"] = os.path.join(_script_dir, "python", "Frameworks", "Python.framework", "Versions", "3.11")
+    os.execv(_embedded_py, [_embedded_py] + sys.argv)
+elif os.path.exists(_venv_python) and os.path.realpath(sys.executable) != os.path.realpath(_venv_python):
+    os.execv(_venv_python, [_venv_python] + sys.argv)
+
 try:
-    from audio_separator.separator import Separator
+    from audio_separator.separator import Separator  # type: ignore
 except ImportError:
-    _script_dir = os.path.dirname(os.path.abspath(__file__))
-    _embedded_py = os.path.join(_script_dir, "python", "Frameworks", "Python.framework", "Versions", "3.11", "bin", "python3.11")
-    _venv_bin = os.path.join(_script_dir, ".venv", "bin" if sys.platform != "win32" else "Scripts")
-    _venv_python = os.path.join(_venv_bin, "python" + (".exe" if sys.platform == "win32" else ""))
-    
-    if os.path.exists(_embedded_py):
-        _site_pkg = os.path.join(_script_dir, "python", "lib", "python3.11", "site-packages")
-        os.environ["PYTHONPATH"] = f"{_site_pkg}:{_script_dir}"
-        os.environ["PYTHONHOME"] = os.path.join(_script_dir, "python", "Frameworks", "Python.framework", "Versions", "3.11")
-        os.execv(_embedded_py, [_embedded_py] + sys.argv)
-    elif os.path.exists(_venv_python):
-        os.execv(_venv_python, [_venv_python] + sys.argv)
-    else:
-        print("Error: audio-separator is not installed and no Python runtime was found.", file=sys.stderr)
-        sys.exit(1)
+    _site_packages = [
+        os.path.join(_script_dir, ".venv", "lib", "python3.11", "site-packages"),
+        os.path.join(_script_dir, "python", "lib", "python3.11", "site-packages"),
+    ]
+    for _sp in _site_packages:
+        if os.path.isdir(_sp) and _sp not in sys.path:
+            sys.path.insert(0, _sp)
+    try:
+        from audio_separator.separator import Separator  # type: ignore
+    except ImportError:
+        Separator = None  # type: ignore
 
 import argparse
 import shutil
 
 # FFmpeg PATH Auto-Discovery (Static imageio_ffmpeg + Bundled bin + System)
 try:
-    import imageio_ffmpeg
+    import imageio_ffmpeg  # type: ignore
     _ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     if _ffmpeg_exe and os.path.exists(_ffmpeg_exe):
         _ffmpeg_dir = os.path.dirname(_ffmpeg_exe)
@@ -61,6 +70,10 @@ for _dir in _ffmpeg_search_dirs:
         break
 
 def run_worker():
+    if Separator is None:
+        print("ERROR: audio-separator is not installed in the active runtime.", file=sys.stdout)
+        sys.exit(1)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--job_id", required=True)
     parser.add_argument("--input", required=True)
@@ -74,52 +87,60 @@ def run_worker():
     
     # Limit PyTorch CPU threads to avoid severe contention on low-resource environments (like Azure Container Apps)
     # which can cause the process to hang at "0% / Calculating".
-    import torch
-    if args.device_type == "cpu":
-        torch.set_num_threads(2)
+    try:
+        import torch  # type: ignore
+        if args.device_type == "cpu":
+            torch.set_num_threads(2)
+    except Exception:
+        pass
 
     import inspect
     try:
         init_sig = inspect.signature(Separator.__init__)
-        has_audio_file_path = "audio_file_path" in init_sig.parameters
+        init_params = init_sig.parameters
     except Exception:
-        has_audio_file_path = False
+        init_params = {}
 
-    # Check both inspect signature and existence of load_model method.
-    # load_model was introduced in newer versions (~v0.9.0+) of audio-separator.
-    # We check hasattr(Separator, "load_model") as signature inspections can be obscured by @beartype decorators.
+    has_audio_file_path = "audio_file_path" in init_params
+
+    # Build kwargs dynamically based on what Separator.__init__ accepts
+    kwargs = {}
+    if "output_dir" in init_params:
+        kwargs["output_dir"] = args.out_dir
+    if "output_format" in init_params:
+        kwargs["output_format"] = "mp3"
+    if "model_file_dir" in init_params:
+        kwargs["model_file_dir"] = args.models_dir
+    if "log_level" in init_params:
+        kwargs["log_level"] = 10
+    if "demucs_params" in init_params:
+        kwargs["demucs_params"] = {"shifts": args.shifts}
+    elif "demucs_shifts" in init_params:
+        kwargs["demucs_shifts"] = args.shifts
+
+    if args.device_type == "directml" and "use_directml" in init_params:
+        kwargs["use_directml"] = True
+    elif args.device_type == "mps" and "use_coreml" in init_params:
+        kwargs["use_coreml"] = True
+    elif args.device_type == "cuda" and "use_cuda" in init_params:
+        kwargs["use_cuda"] = True
+
     if has_audio_file_path or not hasattr(Separator, "load_model"):
-        print("worker: Using older audio-separator API (v0.8.x)...", file=sys.stderr)
-        old_kwargs = {
-            "output_dir": args.out_dir,
-            "output_format": "mp3",
-            "model_file_dir": args.models_dir,
-            "model_name": "htdemucs_6s.yaml",
-            "demucs_shifts": args.shifts,
-            "log_level": 10,
-        }
-        if args.device_type == "mps":
-            old_kwargs["use_coreml"] = True
-        elif args.device_type == "cuda":
-            old_kwargs["use_cuda"] = True
-
-        # Pass audio_file_path positionally in case it is positional-only
-        separator = Separator(args.input, **old_kwargs)
+        print("worker: Using legacy audio-separator API...", file=sys.stderr)
+        if "model_name" in init_params:
+            kwargs["model_name"] = "htdemucs_6s.yaml"
+        separator = Separator(args.input, **kwargs)
+        if hasattr(separator, "arch_specific_params") and isinstance(separator.arch_specific_params, dict):
+            if "Demucs" in separator.arch_specific_params and isinstance(separator.arch_specific_params["Demucs"], dict):
+                separator.arch_specific_params["Demucs"]["shifts"] = args.shifts
         print("worker: Separating stems...", file=sys.stderr)
         output_files = separator.separate()
     else:
-        print("worker: Using newer audio-separator API...", file=sys.stderr)
-        separator_kwargs = {
-            "output_dir": args.out_dir,
-            "output_format": "mp3",
-            "model_file_dir": args.models_dir,
-            "demucs_shifts": args.shifts,
-            "log_level": 10,
-        }
-        if args.device_type == "directml":
-            separator_kwargs["use_directml"] = True
-
-        separator = Separator(**separator_kwargs)
+        print("worker: Using standard audio-separator API...", file=sys.stderr)
+        separator = Separator(**kwargs)
+        if hasattr(separator, "arch_specific_params") and isinstance(separator.arch_specific_params, dict):
+            if "Demucs" in separator.arch_specific_params and isinstance(separator.arch_specific_params["Demucs"], dict):
+                separator.arch_specific_params["Demucs"]["shifts"] = args.shifts
         separator.load_model(model_filename="htdemucs_6s.yaml")
         print("worker: Separating stems...", file=sys.stderr)
         output_files = separator.separate(args.input)
