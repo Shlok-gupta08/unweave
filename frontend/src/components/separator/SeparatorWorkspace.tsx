@@ -224,8 +224,8 @@ export const SeparatorWorkspace: React.FC<SeparatorWorkspaceProps> = ({ onNaviga
                 audioUrl: url,
                 startTime: 0,
                 offset: 0,
-                duration: 60,
-                originalDuration: 60,
+                duration: 0,
+                originalDuration: 0,
                 gain: 1.0,
                 color: STEM_COLORS[stemName] || '#64748b',
             });

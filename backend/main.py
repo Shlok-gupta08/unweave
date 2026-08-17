@@ -24,9 +24,9 @@ try:
         _std_ffmpeg = os.path.join(_ffmpeg_dir, "ffmpeg")
         if not os.path.exists(_std_ffmpeg):
             try:
-                os.symlink(_ffmpeg_exe, _std_ffmpeg)
-            except Exception:
                 shutil.copy2(_ffmpeg_exe, _std_ffmpeg)
+            except Exception:
+                pass
         os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
 except Exception:
     pass
@@ -192,19 +192,47 @@ app.add_middleware(
 import tempfile
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+is_packaged_app = "Contents/Resources/backend" in BASE_DIR
 
 if CLOUD_MODE:
     TEMP_DIR = os.path.join(tempfile.gettempdir(), "unweave_temp")
     OUTPUT_DIR = os.path.join(tempfile.gettempdir(), "unweave_stems")
+    MODELS_DIR = os.path.join(tempfile.gettempdir(), "unweave_models")
+elif is_packaged_app or not os.access(BASE_DIR, os.W_OK):
+    # Desktop packaged mode or read-only volume (DMG): use User App Support
+    if sys.platform == "darwin":
+        user_storage = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "Unweave Studio", "data")
+    elif sys.platform == "win32":
+        user_storage = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Unweave Studio", "data")
+    else:
+        user_storage = os.path.join(os.path.expanduser("~"), ".unweave", "data")
+    
+    TEMP_DIR = os.path.join(user_storage, "temp_audio")
+    OUTPUT_DIR = os.path.join(user_storage, "static_stems")
+    MODELS_DIR = os.path.join(user_storage, "models")
 else:
     TEMP_DIR = os.path.join(BASE_DIR, "temp_audio")
     OUTPUT_DIR = os.path.join(BASE_DIR, "static_stems")
-
-MODELS_DIR = os.path.join(BASE_DIR, "models")
+    MODELS_DIR = os.path.join(BASE_DIR, "models")
 
 os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
+
+# Copy pre-bundled models from app bundle to user model dir if needed
+bundled_models_dir = os.path.join(BASE_DIR, "models")
+if os.path.isdir(bundled_models_dir) and bundled_models_dir != MODELS_DIR:
+    try:
+        for item in os.listdir(bundled_models_dir):
+            src = os.path.join(bundled_models_dir, item)
+            dst = os.path.join(MODELS_DIR, item)
+            if not os.path.exists(dst):
+                if os.path.isdir(src):
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+    except Exception as e:
+        log.warning(f"Could not copy bundled models: {e}")
 
 app.mount("/stems", StaticFiles(directory=OUTPUT_DIR), name="stems")
 app.mount("/api/stems", StaticFiles(directory=OUTPUT_DIR), name="api_stems")

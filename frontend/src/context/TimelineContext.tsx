@@ -75,34 +75,66 @@ interface TimelineContextValue {
     canRedo: boolean;
 }
 
-const defaultTracks: TimelineTrack[] = [
-    {
-        id: 'track_vocals',
-        name: 'Vocals',
-        color: '#ef4444',
-        volume: 1.0,
-        pan: 0.0,
-        isMuted: false,
-        isSolo: false,
-        eqLow: 0,
-        eqMid: 0,
-        eqHigh: 0,
-        spatialSettings: {
-            pattern: 'front-ellipse',
-            radius: 1.8,
-            speedSeconds: 10,
+export function getDefaultSpatialSettingsForStem(stemOrTrackName: string): TrackSpatialSettings {
+    const name = stemOrTrackName.toLowerCase();
+    if (name.includes('bass') || name.includes('sub') || name.includes('808')) {
+        return {
+            pattern: 'static-center',
+            radius: 0,
+            speedSeconds: 0,
             direction: 1,
+            reverbWet: 0.03,
+            elevation: 0,
+            isCenterLocked: true,
+            intensity: 1.0,
+            crossEarSpill: 0.15,
+        };
+    }
+    if (name.includes('drum') || name.includes('kick') || name.includes('snare') || name.includes('beat') || name.includes('percussion')) {
+        return {
+            pattern: 'static-center',
+            radius: 0,
+            speedSeconds: 0,
+            direction: 1,
+            reverbWet: 0.03,
+            elevation: 0,
+            isCenterLocked: true,
+            intensity: 1.0,
+            crossEarSpill: 0.15,
+        };
+    }
+    if (name.includes('vocal') || name.includes('voice') || name.includes('acapella') || name.includes('speech') || name.includes('sing')) {
+        return {
+            pattern: 'circle',
+            radius: 2.2,
+            speedSeconds: 10,
+            direction: -1, // Counter-Clockwise for Vocals
             reverbWet: 0.16,
-            elevation: 0.3,
+            elevation: 0.25,
             isCenterLocked: false,
             intensity: 1.0,
             crossEarSpill: 0.35,
-        },
-    },
+        };
+    }
+    // Instruments / Other / Guitar / Piano
+    return {
+        pattern: 'circle',
+        radius: 3.0,
+        speedSeconds: 12,
+        direction: 1, // Clockwise for Instruments / Other
+        reverbWet: 0.16,
+        elevation: 0.15,
+        isCenterLocked: false,
+        intensity: 1.0,
+        crossEarSpill: 0.35,
+    };
+}
+
+const defaultTracks: TimelineTrack[] = [
     {
-        id: 'track_drums',
-        name: 'Drums',
-        color: '#f59e0b',
+        id: 'track_bass',
+        name: 'Bass',
+        color: '#3b82f6',
         volume: 1.0,
         pan: 0.0,
         isMuted: false,
@@ -123,9 +155,9 @@ const defaultTracks: TimelineTrack[] = [
         },
     },
     {
-        id: 'track_bass',
-        name: 'Bass',
-        color: '#3b82f6',
+        id: 'track_drums',
+        name: 'Drums',
+        color: '#f59e0b',
         volume: 1.0,
         pan: 0.0,
         isMuted: false,
@@ -158,9 +190,78 @@ const defaultTracks: TimelineTrack[] = [
         eqHigh: 0,
         spatialSettings: {
             pattern: 'circle',
-            radius: 3.2,
+            radius: 3.0,
+            speedSeconds: 12,
+            direction: 1, // Clockwise (CW)
+            reverbWet: 0.16,
+            elevation: 0.15,
+            isCenterLocked: false,
+            intensity: 1.0,
+            crossEarSpill: 0.35,
+        },
+    },
+    {
+        id: 'track_vocals',
+        name: 'Vocals',
+        color: '#ef4444',
+        volume: 1.0,
+        pan: 0.0,
+        isMuted: false,
+        isSolo: false,
+        eqLow: 0,
+        eqMid: 0,
+        eqHigh: 0,
+        spatialSettings: {
+            pattern: 'circle',
+            radius: 2.2,
             speedSeconds: 10,
-            direction: -1,
+            direction: -1, // Counter-Clockwise (CCW)
+            reverbWet: 0.16,
+            elevation: 0.25,
+            isCenterLocked: false,
+            intensity: 1.0,
+            crossEarSpill: 0.35,
+        },
+    },
+    {
+        id: 'track_guitar',
+        name: 'Guitar',
+        color: '#10b981',
+        volume: 1.0,
+        pan: 0.0,
+        isMuted: false,
+        isSolo: false,
+        eqLow: 0,
+        eqMid: 0,
+        eqHigh: 0,
+        spatialSettings: {
+            pattern: 'circle',
+            radius: 3.0,
+            speedSeconds: 12,
+            direction: 1,
+            reverbWet: 0.16,
+            elevation: 0.15,
+            isCenterLocked: false,
+            intensity: 1.0,
+            crossEarSpill: 0.35,
+        },
+    },
+    {
+        id: 'track_piano',
+        name: 'Piano',
+        color: '#ec4899',
+        volume: 1.0,
+        pan: 0.0,
+        isMuted: false,
+        isSolo: false,
+        eqLow: 0,
+        eqMid: 0,
+        eqHigh: 0,
+        spatialSettings: {
+            pattern: 'circle',
+            radius: 3.0,
+            speedSeconds: 12,
+            direction: 1,
             reverbWet: 0.16,
             elevation: 0.15,
             isCenterLocked: false,
@@ -350,10 +451,10 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
         return () => cancelAnimationFrame(meterRaf);
     }, [isPlaying]);
 
-    // Sync tracks with AudioEngine
+    // Sync tracks and 8D spatial parameters with AudioEngine in real time
     useEffect(() => {
-        audioEngine.syncTracks(project.tracks);
-    }, [project.tracks]);
+        audioEngine.syncTracks(project.tracks, project.globalSpatialSettings);
+    }, [project.tracks, project.globalSpatialSettings]);
 
     // ──────────────────────────────────────────────
     // Transport Actions
@@ -376,10 +477,11 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
             () => {
                 setIsPlaying(false);
                 setPlayheadTime(0);
-            }
+            },
+            project.globalSpatialSettings
         );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [playheadTime, project.clips, project.tracks, project.duration, project.isLooping, project.loopStart, project.loopEnd]);
+    }, [playheadTime, project.clips, project.tracks, project.duration, project.isLooping, project.loopStart, project.loopEnd, project.globalSpatialSettings]);
 
     const pause = useCallback(() => {
         const pausedTime = audioEngine.pause();
@@ -398,8 +500,8 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
     const seek = useCallback((time: number) => {
         const clampedTime = Math.max(0, Math.min(project.duration, time));
         setPlayheadTime(clampedTime);
-        audioEngine.seek(clampedTime, project.clips, project.tracks, project.duration);
-    }, [project.duration, project.clips, project.tracks]);
+        audioEngine.seek(clampedTime, project.clips, project.tracks, project.duration, project.globalSpatialSettings);
+    }, [project.duration, project.clips, project.tracks, project.globalSpatialSettings]);
 
     const setMasterVolume = useCallback((vol: number) => {
         const clamped = Math.max(0, Math.min(1.5, vol));
@@ -621,6 +723,7 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
                 eqHigh: 0,
                 isMuted: false,
                 isSolo: false,
+                spatialSettings: getDefaultSpatialSettingsForStem(t.name),
             }));
             const nextProj = { ...prev, tracks: nextTracks, masterVolume: 1.0 };
             pushHistory(nextProj);
@@ -722,71 +825,54 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
         });
     }, [pushHistory]);
 
-    const splitClipAtPlayhead = useCallback((targetClipId?: string) => {
-        let clipsToSplit: TimelineClip[] = [];
+    const splitClipAtPlayhead = useCallback(() => {
+        const time = playheadTime;
+        const targetClips = selectedClipIds.length > 0
+            ? project.clips.filter(c => selectedClipIds.includes(c.id))
+            : project.clips;
 
-        if (targetClipId) {
-            const c = project.clips.find(item => item.id === targetClipId);
-            if (c) clipsToSplit = [c];
-        } else if (selectedClipIds.length > 0) {
-            // If clips are explicitly selected, split only those selected clips that intersect with the playhead
-            clipsToSplit = project.clips.filter(c => selectedClipIds.includes(c.id));
-        } else {
-            // If NO clip is selected, split ALL clips across all tracks that intersect with the playhead timestamp!
-            clipsToSplit = project.clips.filter(c => {
-                const start = c.startTime;
-                const end = c.startTime + c.duration;
-                return playheadTime >= start + 0.05 && playheadTime <= end - 0.05;
+        const splitCandidates = targetClips.filter(c => time > c.startTime && time < c.startTime + c.duration);
+        if (splitCandidates.length === 0) return;
+
+        const newClips: TimelineClip[] = [];
+        const modifiedClips: TimelineClip[] = [];
+        const originalIds = new Set(splitCandidates.map(c => c.id));
+
+        for (const clip of splitCandidates) {
+            const splitPointWithinClip = time - clip.startTime;
+            const leftDuration = splitPointWithinClip;
+            const rightDuration = clip.duration - splitPointWithinClip;
+            const rightOffset = clip.offset + splitPointWithinClip;
+
+            // Modified left half
+            modifiedClips.push({
+                ...clip,
+                duration: leftDuration,
+            });
+
+            // New right half
+            const rightId = `clip_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            newClips.push({
+                ...clip,
+                id: rightId,
+                startTime: time,
+                offset: rightOffset,
+                duration: rightDuration,
             });
         }
 
-        // Filter to only those intersecting with playhead timestamp
-        const validClips = clipsToSplit.filter(clip => {
-            const start = clip.startTime;
-            const end = clip.startTime + clip.duration;
-            return playheadTime >= start + 0.05 && playheadTime <= end - 0.05;
-        });
-
-        if (validClips.length === 0) return;
-
-        const newRightClips: TimelineClip[] = [];
-        const validClipIds = validClips.map(c => c.id);
-
         setProject(prev => {
-            const nextClips = prev.clips.map(clip => {
-                if (!validClipIds.includes(clip.id)) return clip;
-
-                const clipStart = clip.startTime;
-                const deltaT = playheadTime - clipStart;
-                const leftDuration = deltaT;
-                const rightOffset = clip.offset + deltaT;
-                const rightDuration = clip.duration - deltaT;
-
-                const rightClipId = `clip_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-                const rightClip: TimelineClip = {
-                    ...clip,
-                    id: rightClipId,
-                    startTime: playheadTime,
-                    offset: rightOffset,
-                    duration: rightDuration,
-                };
-                newRightClips.push(rightClip);
-
-                return {
-                    ...clip,
-                    duration: leftDuration,
-                };
-            }).concat(newRightClips);
-
-            const nextProj = { ...prev, clips: nextClips };
+            const remainingClips = prev.clips.filter(c => !originalIds.has(c.id));
+            const nextProj = {
+                ...prev,
+                clips: [...remainingClips, ...modifiedClips, ...newClips],
+            };
             pushHistory(nextProj);
             return nextProj;
         });
 
-        if (newRightClips.length > 0) {
-            setSelectedClipIds(newRightClips.map(c => c.id));
-        }
-    }, [selectedClipIds, project.clips, playheadTime, pushHistory]);
+        setSelectedClipIds(newClips.map(c => c.id));
+    }, [playheadTime, selectedClipIds, project.clips, pushHistory]);
 
     const duplicateClip = useCallback((clipId: string) => {
         const clip = project.clips.find(c => c.id === clipId);
@@ -941,7 +1027,9 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
         const hydratedClips = await Promise.all(restoredProj.clips.map(async (c) => {
             let audioUrl = c.audioUrl;
             if (!audioUrl || audioUrl.startsWith('blob:')) {
-                const validUrl = await projectStorage.getStemAudioUrl(c.trackId) || await projectStorage.getStemAudioUrl(`${c.songId}_${c.stemName}`);
+                const validUrl = await projectStorage.getStemAudioUrl(c.id) ||
+                                 await projectStorage.getStemAudioUrl(c.trackId) ||
+                                 await projectStorage.getStemAudioUrl(`${c.songId}_${c.stemName}`);
                 if (validUrl) audioUrl = validUrl;
             }
             let peaks = c.peaks;
@@ -976,15 +1064,22 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
         if (savedProj && savedProj.tracks.length > 0 && savedProj.clips.length > 0) {
             // Recompute peaks for clips if missing
             const hydratedClips = await Promise.all(savedProj.clips.map(async (c) => {
+                let audioUrl = c.audioUrl;
+                if (!audioUrl || audioUrl.startsWith('blob:')) {
+                    const validUrl = await projectStorage.getStemAudioUrl(c.id) ||
+                                     await projectStorage.getStemAudioUrl(c.trackId) ||
+                                     await projectStorage.getStemAudioUrl(`${c.songId}_${c.stemName}`);
+                    if (validUrl) audioUrl = validUrl;
+                }
                 if (!c.peaks || c.peaks.length === 0) {
                     try {
-                        const p = await getOrComputePeaks(c.audioUrl);
-                        return { ...c, peaks: p };
+                        const p = await getOrComputePeaks(audioUrl);
+                        return { ...c, audioUrl, peaks: p };
                     } catch {
-                        return c;
+                        return { ...c, audioUrl };
                     }
                 }
-                return c;
+                return { ...c, audioUrl };
             }));
 
             const restoredProj: TimelineProject = {
@@ -1003,8 +1098,18 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
 
         if (!song.stems) return;
 
+        const STEM_CANONICAL_ORDER = ['Bass', 'Drums', 'Other', 'Vocals', 'Guitar', 'Piano'];
         const stemEntries = Object.entries(song.stems).filter(([, url]) => !!url);
         if (stemEntries.length === 0) return;
+
+        // Sort stems in canonical studio order: Bass, Drums, Other, Vocals, Guitar, Piano
+        stemEntries.sort((a, b) => {
+            const idxA = STEM_CANONICAL_ORDER.findIndex(s => a[0].toLowerCase().includes(s.toLowerCase()));
+            const idxB = STEM_CANONICAL_ORDER.findIndex(s => b[0].toLowerCase().includes(s.toLowerCase()));
+            const rankA = idxA === -1 ? 99 : idxA;
+            const rankB = idxB === -1 ? 99 : idxB;
+            return rankA - rankB;
+        });
 
         const newTracks: TimelineTrack[] = [];
         const newClips: TimelineClip[] = [];
@@ -1026,6 +1131,7 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
                 eqLow: 0,
                 eqMid: 0,
                 eqHigh: 0,
+                spatialSettings: getDefaultSpatialSettingsForStem(stemName),
             });
 
             let duration = 60;
@@ -1100,8 +1206,8 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
         setProject(prev => ({ ...prev, isSnappingEnabled: !prev.isSnappingEnabled }));
     }, []);
 
-    const setSnapInterval = useCallback((snapInterval: number) => {
-        setProject(prev => ({ ...prev, snapInterval }));
+    const setSnapInterval = useCallback((interval: number) => {
+        setProject(prev => ({ ...prev, snapInterval: interval }));
     }, []);
 
     const toggleLoop = useCallback(() => {
@@ -1135,7 +1241,7 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
         isUndoingOrRedoing.current = false;
     }, [historyIndex, history]);
 
-    // Global keyboard shortcuts
+    // Global keyboard shortcuts (optimized for macOS & Windows)
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             const target = e.target as HTMLElement;
@@ -1143,35 +1249,79 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            const isCmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+            // Space: Play / Pause
             if (e.code === 'Space') {
                 e.preventDefault();
                 togglePlay();
-            } else if (
-                (e.ctrlKey || e.metaKey) &&
-                (e.key.toLowerCase() === 'b' || e.key.toLowerCase() === 'k' || e.key === '\\')
+            }
+            // S or Cmd+B / Cmd+K / \: Split clip at playhead
+            else if (
+                (!isCmdOrCtrl && e.key.toLowerCase() === 's') ||
+                (isCmdOrCtrl && (e.key.toLowerCase() === 'b' || e.key.toLowerCase() === 'k' || e.key === '\\'))
             ) {
                 e.preventDefault();
                 splitClipAtPlayhead();
-            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
+            }
+            // Cmd+M: Quick Merge selected tracks
+            else if (isCmdOrCtrl && e.key.toLowerCase() === 'm') {
                 e.preventDefault();
                 mergeSelectedTracks().catch(() => {});
-            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+            }
+            // Delete / Backspace: Remove selected clips
+            else if (e.key === 'Delete' || e.key === 'Backspace') {
                 if (selectedClipIds.length > 0) {
+                    e.preventDefault();
                     removeClip();
                 }
-            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+            }
+            // Cmd+Z / Cmd+Shift+Z / Cmd+Y: Undo & Redo
+            else if (isCmdOrCtrl && e.key.toLowerCase() === 'z') {
                 e.preventDefault();
                 if (e.shiftKey) redo();
                 else undo();
-            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+            } else if (isCmdOrCtrl && e.key.toLowerCase() === 'y') {
                 e.preventDefault();
                 redo();
+            }
+            // Cmd+A: Select all clips
+            else if (isCmdOrCtrl && e.key.toLowerCase() === 'a') {
+                e.preventDefault();
+                setSelectedClipIds(project.clips.map(c => c.id));
+            }
+            // Escape: Deselect all
+            else if (e.key === 'Escape') {
+                setSelectedClipIds([]);
+                setSelectedTrackIds([]);
+            }
+            // Arrow Left: Skip backward 1s (or 5s with Shift)
+            else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                const step = e.shiftKey ? 5 : 1;
+                seek(Math.max(0, project.playheadTime - step));
+            }
+            // Arrow Right: Skip forward 1s (or 5s with Shift)
+            else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                const step = e.shiftKey ? 5 : 1;
+                seek(Math.min(project.duration, project.playheadTime + step));
+            }
+            // 0 or Home: Rewind to Start
+            else if (e.key === 'Home' || (!isCmdOrCtrl && e.key === '0')) {
+                e.preventDefault();
+                seek(0);
+            }
+            // L: Toggle Loop
+            else if (!isCmdOrCtrl && e.key.toLowerCase() === 'l') {
+                toggleLoop();
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [togglePlay, splitClipAtPlayhead, mergeSelectedTracks, selectedClipIds, removeClip, undo, redo]);
+    }, [togglePlay, splitClipAtPlayhead, mergeSelectedTracks, selectedClipIds, removeClip, undo, redo, project.clips, project.duration, project.playheadTime, seek, toggleLoop]);
 
     // Listen to native macOS Desktop Transport & Track menu actions
     useEffect(() => {

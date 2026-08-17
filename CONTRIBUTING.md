@@ -25,42 +25,54 @@ npm run dev
 ```
 
 This concurrently starts:
-- **Frontend** dev server at `http://localhost:5173` (Vite + HMR)
-- **Backend** API server at `http://localhost:8000` (FastAPI + Uvicorn)
+- **Frontend** dev server at `http://localhost:5180` (or `http://localhost:5173` with Vite + HMR)
+- **Backend** API server at `http://localhost:8010` (FastAPI + Uvicorn)
 
 ### Project Structure
 
 ```
 unweave/
-├── frontend/              # React + Vite + Tailwind CSS v4 SPA
-│   ├── public/            # Static assets (logos, icons)
+├── frontend/                  # React 19 + Vite 7 + Tailwind CSS DAW Application
+│   ├── public/                # Static icons, logos, and runtime config
 │   └── src/
-│       ├── components/    # UI components (Mixer, Track, Uploader, MergeDialog)
-│       ├── utils/         # Audio processing utilities (audioUtils, db)
-│       ├── types/         # TypeScript type declarations
-│       ├── App.tsx        # Root application component
-│       ├── main.tsx       # React entry point
-│       └── types.ts       # Shared TypeScript interfaces
-├── backend/               # Python + FastAPI + Demucs
-│   ├── main.py            # API server + GPU detection + separation worker
-│   ├── Dockerfile         # NVIDIA CUDA image
-│   ├── Dockerfile.cpu     # Lightweight CPU image
-│   ├── Dockerfile.rocm    # AMD ROCm image
-│   └── requirements.txt
-├── scripts/               # One-click OS installers
-│   ├── install.ps1        # Windows (PowerShell)
-│   ├── install.sh         # Linux (Bash)
-│   └── install-mac.sh     # macOS (Bash)
-├── docs/                  # Documentation
-│   ├── INSTALLATION.md
-│   ├── GPU_SETUP.md
-│   └── CLOUD_DEPLOYMENT.md
-├── docker-compose.yml         # NVIDIA GPU (default)
-├── docker-compose.cpu.yml     # CPU override
-├── docker-compose.rocm.yml    # AMD ROCm override
-├── docker-compose.cloud.yml   # Cloud optimized
-├── .env.example               # Environment template
-├── CONTRIBUTING.md            # This file
+│       ├── components/
+│       │   ├── separator/     # AI Stem separation workspace & batch queue
+│       │   ├── timeline/      # Multi-track DAW timeline, tracks, clips & MediaPool
+│       │   ├── mixer/         # Live mixer console, log dB faders & 60fps VU meters
+│       │   ├── spatial/       # 360° 8D spatial audio mixer & radar visualizer
+│       │   ├── export/        # Lossless WAV & high-bitrate MP3 export hub
+│       │   ├── modals/        # Project manager, recovery, & modal dialogs
+│       │   └── navigation/    # Bottom navigation tabs and top app header
+│       ├── context/           # TimelineContext, SongLibraryContext, ProcessingModeContext
+│       ├── services/          # Web Audio API engine (audioEngine.ts) & projectStorage.ts
+│       ├── utils/             # IndexedDB cache (db.ts), waveform.ts, spatial8DRenderer.ts
+│       ├── App.tsx            # Main workspace orchestrator & mode coordination
+│       ├── main.tsx           # React DOM entry point
+│       └── types.ts           # Unified DAW TypeScript interfaces
+├── backend/                   # Python 3.11 + FastAPI + Demucs AI Engine
+│   ├── main.py                # REST API, health checker & job supervisor
+│   ├── worker.py              # Sequential Demucs execution queue worker
+│   ├── run_embedded_backend.sh# Embedded backend launcher for standalone app bundle
+│   ├── requirements.txt       # Python dependencies (PyTorch, Demucs, FastAPI)
+│   ├── Dockerfile             # NVIDIA CUDA container image
+│   ├── Dockerfile.cpu         # Lightweight CPU container image
+│   └── Dockerfile.rocm        # AMD ROCm container image
+├── desktop/                   # Electron Standalone macOS Application
+│   ├── main.js                # Process lifecycle, native macOS menu bar & IPC
+│   ├── preload.js             # Context bridge for persistent project storage
+│   └── package.json           # Electron application manifest
+├── scripts/                   # Automated OS installers & desktop packagers
+│   ├── package-mac.sh         # Standalone macOS .app & .dmg packaging script
+│   ├── install-mac.sh         # 1-click macOS setup script
+│   ├── install.sh             # 1-click Linux setup script
+│   └── install.ps1            # 1-click Windows setup script
+├── .github/
+│   └── workflows/
+│       └── deploy.yml         # CI/CD deployment workflow
+├── dist-desktop/              # Packaged macOS App & DMG binaries (git-ignored)
+├── docker-compose.yml         # Multi-container orchestration (GPU / CPU)
+├── package.json               # Root workspace scripts
+├── CONTRIBUTING.md            # Contribution guidelines
 └── LICENSE                    # MIT License
 ```
 

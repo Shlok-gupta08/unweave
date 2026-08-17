@@ -12,6 +12,7 @@ import { ExportWorkspace } from './components/export/ExportWorkspace';
 import { ProjectRecoveryModal } from './components/modals/ProjectRecoveryModal';
 import { ProjectManagerModal } from './components/modals/ProjectManagerModal';
 import { projectStorage } from './services/projectStorage';
+import { audioEngine } from './services/audioEngine';
 import type { WorkspaceTab, AutoSaveInfo } from './types';
 
 function AppContent() {
@@ -148,6 +149,11 @@ function AppContent() {
     setShowGpuUnavailableModal(true);
   };
 
+  // Switch between Standard Stereo (Timeline/Mixer) and 360° 8D Audio (Spatial Tab)
+  useEffect(() => {
+    audioEngine.setPlaybackMode(activeTab === 'spatial' ? '8d' : 'stereo');
+  }, [activeTab]);
+
   return (
     <div className={`min-h-screen bg-black text-slate-50 font-sans selection:bg-yellow-500/30 overflow-x-hidden flex flex-col justify-between ${
       activeTab === 'separate' || activeTab === 'export' ? 'pb-16' : 'pb-14'
@@ -157,7 +163,7 @@ function AppContent() {
         className="fixed w-full bg-black/60 border-b border-white/5 top-0 z-50 backdrop-blur-xl"
         style={isDesktop ? { WebkitAppRegion: 'drag' } as React.CSSProperties : undefined}
       >
-        <div className={`max-w-7xl mx-auto px-3 sm:px-5 h-14 sm:h-16 flex items-center justify-between ${isDesktop ? 'pl-20' : ''}`}>
+        <div className={`w-full ${isDesktop ? 'pl-24 sm:pl-28 pr-4 sm:pr-8' : 'px-4 sm:px-8'} h-14 sm:h-16 flex items-center justify-between`}>
           <div
             onClick={() => setActiveTab('separate')}
             className="flex items-center gap-2.5 group cursor-pointer"

@@ -55,8 +55,8 @@ export const MediaPool: React.FC<MediaPoolProps> = ({ onCollapse }) => {
             audioUrl: url,
             startTime: project.playheadTime,
             offset: 0,
-            duration: 60,
-            originalDuration: 60,
+            duration: 0, // addClip will automatically compute exact audio duration from buffer
+            originalDuration: 0,
             gain: 1.0,
             color,
         });

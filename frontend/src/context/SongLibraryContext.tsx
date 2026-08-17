@@ -112,14 +112,35 @@ export function SongLibraryProvider({ children }: { children: ReactNode }) {
 
                     if (song.status === 'complete' && song.stems) {
                         const hydratedStems: Stems = { ...song.stems };
-                        for (const stemName of Object.keys(song.stems)) {
+                        for (const [stemName, originalUrl] of Object.entries(song.stems)) {
+                            if (!originalUrl) continue;
                             const stemKey = `${song.id}_${stemName}`;
                             try {
-                                const validUrl = await projectStorage.getStemAudioUrl(stemKey);
-                                if (validUrl) {
-                                    hydratedStems[stemName] = validUrl;
-                                    songModified = true;
-                                    changed = true;
+                                let isAlive = false;
+                                if (originalUrl.startsWith('http://') || originalUrl.startsWith('https://')) {
+                                    isAlive = true;
+                                } else if (originalUrl.startsWith('blob:')) {
+                                    try {
+                                        const testRes = await fetch(originalUrl, { method: 'HEAD' });
+                                        isAlive = testRes.ok;
+                                    } catch {
+                                        isAlive = false;
+                                    }
+                                }
+
+                                if (!isAlive) {
+                                    const validUrl = await projectStorage.getStemAudioUrl(stemKey);
+                                    if (validUrl) {
+                                        hydratedStems[stemName] = validUrl;
+                                        songModified = true;
+                                        changed = true;
+                                    } else if (song.jobId) {
+                                        // Fallback to persistent backend static stem on local disk
+                                        const backendUrl = `http://127.0.0.1:8010/stems/${song.jobId}_${stemName.toLowerCase()}.mp3`;
+                                        hydratedStems[stemName] = backendUrl;
+                                        songModified = true;
+                                        changed = true;
+                                    }
                                 }
                             } catch {
                                 // Ignore

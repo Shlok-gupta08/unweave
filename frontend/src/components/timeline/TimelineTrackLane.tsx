@@ -72,8 +72,8 @@ export const TimelineTrackLane: React.FC<TimelineTrackLaneProps> = ({
                 audioUrl: data.audioUrl,
                 startTime: finalTime,
                 offset: 0,
-                duration: 60,
-                originalDuration: 60,
+                duration: 0,
+                originalDuration: 0,
                 gain: 1.0,
                 color: data.color || track.color,
             });

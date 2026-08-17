@@ -1,8 +1,16 @@
-name: Deploy Unweave
+name: Deploy Unweave (Paused)
 
+# ==============================================================================
+# PAUSED: Automatic CI/CD deployment to Azure Container Apps is paused
+# to prevent build failures and notification emails while Azure credits are inactive.
+#
+# • Manual Trigger: You can manually run this workflow from the GitHub Actions tab.
+# • To Resume: Uncomment the `push:` block below.
+# ==============================================================================
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch: # Allows manual run only from GitHub Actions UI
+  # push:
+  #   branches: [ main ]
 
 jobs:
   build-and-deploy:

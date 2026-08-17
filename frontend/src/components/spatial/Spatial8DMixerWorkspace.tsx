@@ -67,18 +67,146 @@ export const Spatial8DMixerWorkspace: React.FC = () => {
         masterSpread: 1.0,
     }, [project.globalSpatialSettings]);
 
-    // Specifically interchange Bass and Vocals for the 8D Spatial mixer cards
-    const spatialTracks = useMemo(() => {
-        const list = [...project.tracks];
-        const vocalsIdx = list.findIndex(t => t.name.toLowerCase().includes('vocal') || t.id.includes('vocal'));
-        const bassIdx = list.findIndex(t => t.name.toLowerCase().includes('bass') || t.id.includes('bass'));
-        if (vocalsIdx !== -1 && bassIdx !== -1) {
-            const temp = list[vocalsIdx];
-            list[vocalsIdx] = list[bassIdx];
-            list[bassIdx] = temp;
-        }
-        return list;
+    // ──────────────────────────────────────────────
+    // 4 Consolidated Spatial Soundstage Groups
+    // (Bass+Drums, Other/Ambience, Vocals, Guitar+Piano)
+    // ──────────────────────────────────────────────
+    interface SpatialGroup {
+        id: string;
+        title: string;
+        subtitle: string;
+        color: string;
+        secondaryColor?: string;
+        stems: string[];
+        trackIds: string[];
+        tracks: TimelineTrack[];
+        spatial: TrackSpatialSettings;
+    }
+
+    const spatialGroups: SpatialGroup[] = useMemo(() => {
+        const allTracks = project.tracks;
+
+        const bassDrumsTracks = allTracks.filter(t => {
+            const n = t.name.toLowerCase();
+            return n.includes('bass') || n.includes('drum') || n.includes('kick') || n.includes('808') || n.includes('snare') || n.includes('percussion');
+        });
+
+        const otherTracks = allTracks.filter(t => {
+            const n = t.name.toLowerCase();
+            return n.includes('other') || n.includes('fx') || n.includes('synth') || n.includes('ambient') || n.includes('pad');
+        });
+
+        const vocalTracks = allTracks.filter(t => {
+            const n = t.name.toLowerCase();
+            return n.includes('vocal') || n.includes('voice') || n.includes('sing') || n.includes('acapella') || n.includes('lead');
+        });
+
+        const guitarPianoTracks = allTracks.filter(t => {
+            const n = t.name.toLowerCase();
+            return n.includes('guitar') || n.includes('piano') || n.includes('key') || n.includes('acoustic') || n.includes('electric') || n.includes('organ');
+        });
+
+        const assignedIds = new Set([
+            ...bassDrumsTracks.map(t => t.id),
+            ...otherTracks.map(t => t.id),
+            ...vocalTracks.map(t => t.id),
+            ...guitarPianoTracks.map(t => t.id),
+        ]);
+
+        const remainingTracks = allTracks.filter(t => !assignedIds.has(t.id));
+
+        return [
+            {
+                id: 'group_bass_drums',
+                title: 'Bass & Drums',
+                subtitle: 'Low-End Rhythm (Mono Centered)',
+                color: '#3b82f6',
+                secondaryColor: '#f59e0b',
+                stems: ['Bass', 'Drums'],
+                trackIds: bassDrumsTracks.map(t => t.id),
+                tracks: bassDrumsTracks,
+                spatial: bassDrumsTracks[0]?.spatialSettings || {
+                    pattern: 'static-center',
+                    radius: 0,
+                    speedSeconds: 0,
+                    direction: 1,
+                    reverbWet: 0.03,
+                    elevation: 0,
+                    isCenterLocked: true,
+                    intensity: 1.0,
+                    crossEarSpill: 0.15,
+                },
+            },
+            {
+                id: 'group_other',
+                title: 'Other & Ambience',
+                subtitle: 'Atmosphere & FX Bed',
+                color: '#8b5cf6',
+                stems: ['Other'],
+                trackIds: [...otherTracks.map(t => t.id), ...remainingTracks.map(t => t.id)],
+                tracks: [...otherTracks, ...remainingTracks],
+                spatial: otherTracks[0]?.spatialSettings || remainingTracks[0]?.spatialSettings || {
+                    pattern: 'circle',
+                    radius: 3.0,
+                    speedSeconds: 12,
+                    direction: 1,
+                    reverbWet: 0.16,
+                    elevation: 0.15,
+                    isCenterLocked: false,
+                    intensity: 1.0,
+                    crossEarSpill: 0.35,
+                },
+            },
+            {
+                id: 'group_vocals',
+                title: 'Vocals & Lead',
+                subtitle: 'Surround Orbit (Counter-Clockwise)',
+                color: '#ef4444',
+                stems: ['Vocals'],
+                trackIds: vocalTracks.map(t => t.id),
+                tracks: vocalTracks,
+                spatial: vocalTracks[0]?.spatialSettings || {
+                    pattern: 'circle',
+                    radius: 2.2,
+                    speedSeconds: 10,
+                    direction: -1,
+                    reverbWet: 0.16,
+                    elevation: 0.25,
+                    isCenterLocked: false,
+                    intensity: 1.0,
+                    crossEarSpill: 0.35,
+                },
+            },
+            {
+                id: 'group_guitar_piano',
+                title: 'Guitar & Piano',
+                subtitle: 'Harmonics & Melodic (Clockwise)',
+                color: '#10b981',
+                secondaryColor: '#ec4899',
+                stems: ['Guitar', 'Piano'],
+                trackIds: guitarPianoTracks.map(t => t.id),
+                tracks: guitarPianoTracks,
+                spatial: guitarPianoTracks[0]?.spatialSettings || {
+                    pattern: 'circle',
+                    radius: 3.0,
+                    speedSeconds: 12,
+                    direction: 1,
+                    reverbWet: 0.16,
+                    elevation: 0.15,
+                    isCenterLocked: false,
+                    intensity: 1.0,
+                    crossEarSpill: 0.35,
+                },
+            },
+        ];
     }, [project.tracks]);
+
+    const updateGroupSpatialSettings = useCallback((group: SpatialGroup, updates: Partial<TrackSpatialSettings>) => {
+        if (group.trackIds.length === 0) return;
+        for (const trackId of group.trackIds) {
+            updateTrackSpatialSettings(trackId, updates);
+        }
+    }, [updateTrackSpatialSettings]);
 
     const isManualMode = globalSettings.isManualMode;
     const is8DBypassed = globalSettings.is8DBypassed;
@@ -699,7 +827,7 @@ export const Spatial8DMixerWorkspace: React.FC = () => {
 
             {/* ── Main Workspace Body: Split View ── */}
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-                {/* ── LEFT PANEL: Layer Spatial Channel Strips (60-65%) ── */}
+                {/* ── LEFT PANEL: Consolidated 8D Spatial Groups (60-65%) ── */}
                 <div
                     onClick={(e) => {
                         if (e.target === e.currentTarget) {
@@ -712,94 +840,101 @@ export const Spatial8DMixerWorkspace: React.FC = () => {
                         <div className="flex items-center gap-2">
                             <Compass className="w-4 h-4 text-yellow-400" />
                             <span className="text-xs font-black uppercase tracking-wider text-zinc-300">
-                                Layer Spatial Strips ({project.tracks.length})
+                                8D Spatial Soundstage Modules (4 Groups)
                             </span>
                         </div>
                         {!isManualMode ? (
                             <span className="text-[11px] font-bold text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1">
                                 <Sparkles className="w-3 h-3" />
-                                <span>AI Guided Mode Active</span>
+                                <span>AI Spatial Acoustics Active</span>
                             </span>
                         ) : (
                             <span className="text-[11px] font-bold text-indigo-400 px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center gap-1">
                                 <Sliders className="w-3 h-3" />
-                                <span>Manual Control Unlocked</span>
+                                <span>Manual Trajectory Control</span>
                             </span>
                         )}
                     </div>
 
-                    {/* Track Channel Cards Grid */}
+                    {/* 4 Consolidated Spatial Group Cards Grid */}
                     <div
                         onClick={(e) => {
                             if (e.target === e.currentTarget) {
                                 selectTrack(null);
                             }
                         }}
-                        className="grid grid-cols-1 md:grid-cols-2 gap-3.5"
+                        className="grid grid-cols-1 md:grid-cols-2 gap-3"
                     >
-                        {spatialTracks.map((track) => {
-                            const spatial: TrackSpatialSettings = track.spatialSettings || {
-                                pattern: 'circle',
-                                radius: 2.5,
-                                speedSeconds: 10,
-                                direction: 1,
-                                reverbWet: 0.12,
-                                elevation: 0.2,
-                                isCenterLocked: false,
-                                intensity: 1.0,
-                                crossEarSpill: 0.35,
-                            };
-                            const isSelected = selectedTrackId === track.id;
-                            const stemLabel = getTrackStemLabel(track);
+                        {spatialGroups.map((group) => {
+                            const spatial = group.spatial;
+                            const isGroupSelected = group.trackIds.some(id => id === selectedTrackId);
 
                             return (
                                 <div
-                                    key={track.id}
-                                    onClick={() => selectTrack(track.id)}
-                                    className={`p-3.5 rounded-2xl border transition-all relative overflow-hidden cursor-pointer ${
-                                        isSelected
-                                            ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.25)] bg-zinc-900'
+                                    key={group.id}
+                                    onClick={() => {
+                                        if (group.trackIds[0]) {
+                                            selectTrack(group.trackIds[0]);
+                                        }
+                                    }}
+                                    className={`p-3 sm:p-3.5 rounded-2xl border transition-all relative overflow-hidden cursor-pointer ${
+                                        isGroupSelected
+                                            ? 'border-yellow-400 shadow-[0_0_18px_rgba(250,204,21,0.25)] bg-zinc-900'
                                             : !isManualMode
-                                            ? 'bg-zinc-900/50 border-white/5 opacity-85 hover:border-white/20'
+                                            ? 'bg-zinc-900/60 border-white/10 opacity-90 hover:border-white/20'
                                             : 'bg-zinc-900/90 border-white/10 shadow-lg hover:border-yellow-500/40'
                                     }`}
                                 >
-                                    {/* Top Solid Colored Stem Box Badge (Centered Text Title) */}
+                                    {/* Top Header with Stem Badges & Ground Center Lock */}
                                     <div
-                                        className="w-full px-2 py-2 rounded-xl border flex items-center justify-center shadow-sm mb-3 relative"
+                                        className="w-full px-2.5 py-2 rounded-xl border flex items-center justify-between shadow-sm mb-2.5 relative"
                                         style={{
-                                            backgroundColor: `${track.color}25`,
-                                            borderColor: `${track.color}60`,
+                                            backgroundColor: group.secondaryColor
+                                                ? `color-mix(in srgb, ${group.color} 18%, ${group.secondaryColor} 18%)`
+                                                : `${group.color}25`,
+                                            borderColor: group.secondaryColor
+                                                ? `color-mix(in srgb, ${group.color} 50%, ${group.secondaryColor} 50%)`
+                                                : `${group.color}60`,
                                         }}
                                     >
-                                        <span className="text-xs font-black uppercase tracking-wider text-white text-center truncate px-6">
-                                            {stemLabel}
-                                        </span>
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            {group.stems.map((stem) => (
+                                                <span
+                                                    key={stem}
+                                                    className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider text-white bg-black/60 border border-white/20"
+                                                >
+                                                    {stem}
+                                                </span>
+                                            ))}
+                                            <span className="text-[11px] font-black uppercase tracking-wide text-white ml-1">
+                                                {group.title}
+                                            </span>
+                                        </div>
 
-                                        {/* Ground Center Lock Toggle placed absolute right */}
+                                        {/* Ground Center Lock Toggle */}
                                         <button
                                             title={spatial.isCenterLocked ? 'Locked to Mono Center' : 'Spatial Orbit Active'}
                                             disabled={!isManualMode}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                updateTrackSpatialSettings(track.id, { isCenterLocked: !spatial.isCenterLocked });
+                                                updateGroupSpatialSettings(group, { isCenterLocked: !spatial.isCenterLocked });
                                             }}
-                                            className={`absolute right-1.5 px-2 py-0.5 rounded-md text-[9px] font-bold transition-all border ${
+                                            className={`px-2 py-0.5 rounded-md text-[9px] font-bold transition-all border shrink-0 ${
                                                 spatial.isCenterLocked
                                                     ? 'bg-blue-500/30 text-blue-200 border-blue-400/50'
                                                     : 'bg-black/40 text-zinc-300 border-white/10 hover:text-white'
                                             } ${!isManualMode ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                                         >
-                                            {spatial.isCenterLocked ? '🔒 Center' : '🌐 Orbit'}
+                                            {spatial.isCenterLocked ? '🔒 Mono Center' : '🌐 360° Orbit'}
                                         </button>
                                     </div>
 
                                     {/* Motion Trajectory Pattern Selector */}
-                                    <div className="space-y-1 mb-3">
-                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                                    <div className="space-y-0.5 mb-2.5">
+                                        <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
                                             Trajectory Pattern
                                         </label>
-                                        <div className="grid grid-cols-3 gap-1 bg-black/50 p-1 rounded-xl border border-white/10">
+                                        <div className="grid grid-cols-3 gap-1 bg-black/50 p-0.5 rounded-lg border border-white/10">
                                             {(['circle', 'front-ellipse', 'static-center'] as const).map((pat) => (
                                                 <button
                                                     key={pat}
@@ -807,12 +942,12 @@ export const Spatial8DMixerWorkspace: React.FC = () => {
                                                     disabled={!isManualMode}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        updateTrackSpatialSettings(track.id, {
+                                                        updateGroupSpatialSettings(group, {
                                                             pattern: pat,
                                                             isCenterLocked: pat === 'static-center',
                                                         });
                                                     }}
-                                                    className={`py-1 text-[10px] font-bold rounded-lg transition-all ${
+                                                    className={`py-0.5 text-[9px] font-bold rounded transition-all ${
                                                         spatial.pattern === pat
                                                             ? 'bg-yellow-500 text-black shadow-sm'
                                                             : 'text-zinc-400 hover:text-white hover:bg-white/5'
@@ -825,10 +960,10 @@ export const Spatial8DMixerWorkspace: React.FC = () => {
                                     </div>
 
                                     {/* Sliders Grid: Orbit Radius & Rotation Speed */}
-                                    <div className="grid grid-cols-2 gap-3 mb-2.5">
+                                    <div className="grid grid-cols-2 gap-2.5 mb-2.5">
                                         {/* Orbit Radius / Distance */}
-                                        <div className="space-y-1">
-                                            <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400">
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between text-[9px] font-bold text-zinc-400">
                                                 <span>Distance (Radius)</span>
                                                 <span className="text-yellow-400 font-mono">{spatial.radius.toFixed(1)}m</span>
                                             </div>
@@ -839,14 +974,14 @@ export const Spatial8DMixerWorkspace: React.FC = () => {
                                                 step="0.1"
                                                 disabled={!isManualMode || spatial.isCenterLocked}
                                                 value={spatial.radius}
-                                                onChange={(e) => updateTrackSpatialSettings(track.id, { radius: parseFloat(e.target.value) })}
+                                                onChange={(e) => updateGroupSpatialSettings(group, { radius: parseFloat(e.target.value) })}
                                                 className="w-full h-1 accent-yellow-400 bg-white/10 rounded disabled:opacity-40"
                                             />
                                         </div>
 
                                         {/* Rotation Speed (Period) */}
-                                        <div className="space-y-1">
-                                            <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400">
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between text-[9px] font-bold text-zinc-400">
                                                 <span>Orbit Speed</span>
                                                 <span className="text-yellow-400 font-mono">{spatial.speedSeconds.toFixed(0)}s</span>
                                             </div>
@@ -857,18 +992,18 @@ export const Spatial8DMixerWorkspace: React.FC = () => {
                                                 step="1"
                                                 disabled={!isManualMode || spatial.isCenterLocked}
                                                 value={spatial.speedSeconds}
-                                                onChange={(e) => updateTrackSpatialSettings(track.id, { speedSeconds: parseInt(e.target.value, 10) })}
+                                                onChange={(e) => updateGroupSpatialSettings(group, { speedSeconds: parseInt(e.target.value, 10) })}
                                                 className="w-full h-1 accent-yellow-400 bg-white/10 rounded disabled:opacity-40"
                                             />
                                         </div>
                                     </div>
 
                                     {/* Sliders Grid: Spatial Intensity & 3D Reverb Wet */}
-                                    <div className="grid grid-cols-2 gap-3 mb-2.5">
+                                    <div className="grid grid-cols-2 gap-2.5 mb-2.5">
                                         {/* Spatial Intensity / Volume */}
-                                        <div className="space-y-1">
-                                            <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400">
-                                                <span>Spatial Intensity</span>
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between text-[9px] font-bold text-zinc-400">
+                                                <span>Intensity</span>
                                                 <span className="text-yellow-400 font-mono">{((spatial.intensity ?? 1.0) * 100).toFixed(0)}%</span>
                                             </div>
                                             <input
@@ -878,15 +1013,15 @@ export const Spatial8DMixerWorkspace: React.FC = () => {
                                                 step="0.05"
                                                 disabled={!isManualMode}
                                                 value={spatial.intensity ?? 1.0}
-                                                onChange={(e) => updateTrackSpatialSettings(track.id, { intensity: parseFloat(e.target.value) })}
+                                                onChange={(e) => updateGroupSpatialSettings(group, { intensity: parseFloat(e.target.value) })}
                                                 className="w-full h-1 accent-yellow-400 bg-white/10 rounded disabled:opacity-40"
                                             />
                                         </div>
 
                                         {/* 3D Reverb Surround Depth */}
-                                        <div className="space-y-1">
-                                            <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400">
-                                                <span>3D Reverb Depth</span>
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between text-[9px] font-bold text-zinc-400">
+                                                <span>3D Reverb</span>
                                                 <span className="text-yellow-400 font-mono">{(spatial.reverbWet * 100).toFixed(0)}%</span>
                                             </div>
                                             <input
@@ -896,18 +1031,18 @@ export const Spatial8DMixerWorkspace: React.FC = () => {
                                                 step="0.02"
                                                 disabled={!isManualMode}
                                                 value={spatial.reverbWet}
-                                                onChange={(e) => updateTrackSpatialSettings(track.id, { reverbWet: parseFloat(e.target.value) })}
+                                                onChange={(e) => updateGroupSpatialSettings(group, { reverbWet: parseFloat(e.target.value) })}
                                                 className="w-full h-1 accent-yellow-400 bg-white/10 rounded disabled:opacity-40"
                                             />
                                         </div>
                                     </div>
 
                                     {/* Sliders Grid: Cross-Ear Spill & Direction */}
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 gap-2.5">
                                         {/* Cross-Ear Spill / Spread */}
-                                        <div className="space-y-1">
-                                            <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400">
-                                                <span>Cross-Ear Spill</span>
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between text-[9px] font-bold text-zinc-400">
+                                                <span>Cross Spill</span>
                                                 <span className="text-yellow-400 font-mono">{((spatial.crossEarSpill ?? 0.35) * 100).toFixed(0)}%</span>
                                             </div>
                                             <input
@@ -917,25 +1052,25 @@ export const Spatial8DMixerWorkspace: React.FC = () => {
                                                 step="0.05"
                                                 disabled={!isManualMode}
                                                 value={spatial.crossEarSpill ?? 0.35}
-                                                onChange={(e) => updateTrackSpatialSettings(track.id, { crossEarSpill: parseFloat(e.target.value) })}
+                                                onChange={(e) => updateGroupSpatialSettings(group, { crossEarSpill: parseFloat(e.target.value) })}
                                                 className="w-full h-1 accent-yellow-400 bg-white/10 rounded disabled:opacity-40"
                                             />
                                         </div>
 
                                         {/* Orbit Direction */}
-                                        <div className="space-y-1">
-                                            <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400">
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between text-[9px] font-bold text-zinc-400">
                                                 <span>Direction</span>
-                                                <span className="text-yellow-400">{spatial.direction === 1 ? 'Clockwise' : 'Counter-CW'}</span>
+                                                <span className="text-yellow-400 font-mono">{spatial.direction === 1 ? 'CW' : 'CCW'}</span>
                                             </div>
                                             <button
                                                 type="button"
                                                 disabled={!isManualMode || spatial.isCenterLocked}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    updateTrackSpatialSettings(track.id, { direction: spatial.direction === 1 ? -1 : 1 });
+                                                    updateGroupSpatialSettings(group, { direction: spatial.direction === 1 ? -1 : 1 });
                                                 }}
-                                                className={`w-full py-1 text-[10px] font-bold rounded-lg border border-white/10 transition-all ${
+                                                className={`w-full py-0.5 text-[9px] font-bold rounded border border-white/10 transition-all ${
                                                     spatial.direction === 1 ? 'bg-white/5 text-zinc-300' : 'bg-yellow-500/20 text-yellow-300'
                                                 } ${!isManualMode ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}
                                             >

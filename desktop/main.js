@@ -49,6 +49,7 @@ async function startBackendSupervisor() {
     : path.join(process.resourcesPath, 'backend');
 
   const embeddedScript = path.join(backendDir, 'run_embedded_backend.sh');
+  const embeddedPy = path.join(backendDir, 'python', 'Frameworks', 'Python.framework', 'Versions', '3.11', 'bin', 'python3.11');
   const localVenvPy = path.join(backendDir, '.venv', 'bin', 'python');
   const devWorkspacePy = path.join(process.env.HOME || '', 'Workspace', 'Projects', 'Unweave', 'backend', '.venv', 'bin', 'python');
 
@@ -58,6 +59,9 @@ async function startBackendSupervisor() {
   if (fs.existsSync(embeddedScript)) {
     launchCmd = '/bin/bash';
     launchArgs = [embeddedScript];
+  } else if (fs.existsSync(embeddedPy)) {
+    launchCmd = embeddedPy;
+    launchArgs = ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
   } else if (fs.existsSync(localVenvPy)) {
     launchCmd = localVenvPy;
     launchArgs = ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
@@ -98,8 +102,8 @@ async function startBackendSupervisor() {
       backendProcess = null;
     });
 
-    // Wait up to 8 seconds for backend to be fully online and responsive
-    for (let i = 0; i < 16; i++) {
+    // Wait up to 20 seconds for backend to be fully online and responsive
+    for (let i = 0; i < 40; i++) {
       await new Promise((r) => setTimeout(r, 500));
       const ok = await checkBackendHealth();
       if (ok) {
@@ -321,8 +325,13 @@ function buildMacMenu() {
           click: () => sendMenuAction('navigate', 'mixer')
         },
         {
-          label: 'Export Hub',
+          label: '8D Spatial Mixer',
           accelerator: 'CmdOrCtrl+4',
+          click: () => sendMenuAction('navigate', 'spatial')
+        },
+        {
+          label: 'Export Hub',
+          accelerator: 'CmdOrCtrl+5',
           click: () => sendMenuAction('navigate', 'export')
         },
         { type: 'separator' },

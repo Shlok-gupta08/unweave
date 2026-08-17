@@ -42,9 +42,9 @@ try:
         _std_ffmpeg = os.path.join(_ffmpeg_dir, "ffmpeg")
         if not os.path.exists(_std_ffmpeg):
             try:
-                os.symlink(_ffmpeg_exe, _std_ffmpeg)
-            except Exception:
                 shutil.copy2(_ffmpeg_exe, _std_ffmpeg)
+            except Exception:
+                pass
         os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
 except Exception:
     pass

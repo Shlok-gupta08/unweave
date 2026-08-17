@@ -1,18 +1,63 @@
 import { getOrFetchAudioBuffer } from '../utils/waveform';
-import type { TimelineClip, TimelineTrack } from '../types';
+import type { TimelineClip, TimelineTrack, GlobalSpatialSettings } from '../types';
 
 interface TrackAudioNodes {
     input: GainNode;
+    // Standard 3-Band Parametric EQ
     eqLow: BiquadFilterNode;
     eqMid: BiquadFilterNode;
     eqHigh: BiquadFilterNode;
     volumeGain: GainNode;
-    panner: StereoPannerNode;
+    // Stereo Mode Panner
+    stereoPanner: StereoPannerNode;
+    // 8D Mode Preprocessing Filters & Compressors
+    vocalHighPass: BiquadFilterNode;
+    vocalPresence: BiquadFilterNode;
+    instrumentClarity: BiquadFilterNode;
+    bassCompressor: DynamicsCompressorNode;
+    // 8D HRTF Panner
+    spatialPanner: PannerNode;
+    reverbSendGain: GainNode;
+    // Routing gains
+    stereoBusGain: GainNode;
+    spatialBusGain: GainNode;
 }
 
 interface ActiveSourceInfo {
     source: AudioBufferSourceNode;
     clipGain: GainNode;
+}
+
+/**
+ * Creates a synthetic stereo impulse response for binaural acoustic depth simulation.
+ */
+function createBinauralImpulseResponse(
+    audioContext: BaseAudioContext,
+    durationSeconds = 1.6,
+    decay = 2.0
+): AudioBuffer {
+    const sampleRate = audioContext.sampleRate;
+    const length = Math.floor(sampleRate * durationSeconds);
+    const impulse = audioContext.createBuffer(2, length, sampleRate);
+    const left = impulse.getChannelData(0);
+    const right = impulse.getChannelData(1);
+    const crossDelaySamples = Math.floor(sampleRate * 0.0011);
+
+    for (let i = 0; i < length; i++) {
+        const t = i / sampleRate;
+        const env = Math.exp(-decay * t);
+        const early = t < 0.04 ? Math.sin(t * 1500) * 0.25 : 0;
+        const noiseL = (Math.random() * 2 - 1) + early;
+        const noiseR = (Math.random() * 2 - 1) + early;
+
+        left[i] = noiseL * env;
+        if (i >= crossDelaySamples) {
+            right[i] = (noiseR * 0.85 + left[i - crossDelaySamples] * 0.35) * env;
+        } else {
+            right[i] = noiseR * env;
+        }
+    }
+    return impulse;
 }
 
 export class TimelineAudioEngine {
@@ -22,8 +67,15 @@ export class TimelineAudioEngine {
     private analyser: AnalyserNode | null = null;
     private analyserData: Uint8Array<ArrayBuffer> | null = null;
 
+    // Master Reverb Convolver for 3D Binaural Depth
+    private convolver: ConvolverNode | null = null;
+    private reverbMasterGain: GainNode | null = null;
+    private activeReverbPreset: string = 'studio';
+
     private trackNodes = new Map<string, TrackAudioNodes>();
     private activeSources = new Map<string, ActiveSourceInfo>();
+    private cachedTracks: TimelineTrack[] = [];
+    private cachedGlobalSettings: GlobalSpatialSettings | null = null;
 
     private isPlaying = false;
     private playbackStartTime = 0;
@@ -36,7 +88,7 @@ export class TimelineAudioEngine {
     private masterVolume = 1.0;
 
     constructor() {
-        // AudioContext initialized lazily on first user interaction
+        // AudioContext initialized lazily on user action
     }
 
     private ensureContext(): AudioContext {
@@ -62,6 +114,16 @@ export class TimelineAudioEngine {
             this.analyser.smoothingTimeConstant = 0.8;
             this.analyserData = new Uint8Array(this.analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
 
+            // Master Binaural Convolver & Reverb
+            this.convolver = this.ctx.createConvolver();
+            this.convolver.buffer = createBinauralImpulseResponse(this.ctx, 1.8, 1.1);
+
+            this.reverbMasterGain = this.ctx.createGain();
+            this.reverbMasterGain.gain.setValueAtTime(0.20, this.ctx.currentTime);
+
+            this.convolver.connect(this.reverbMasterGain);
+            this.reverbMasterGain.connect(this.limiter);
+
             // Chain: limiter -> masterGain -> analyser -> destination
             this.limiter.connect(this.masterGain);
             this.masterGain.connect(this.analyser);
@@ -79,20 +141,64 @@ export class TimelineAudioEngine {
         return this.ensureContext();
     }
 
-    public syncTracks(tracks: TimelineTrack[]) {
+    private updateReverbBuffer(preset: string) {
+        if (!this.ctx || !this.convolver || preset === this.activeReverbPreset) return;
+        this.activeReverbPreset = preset;
+
+        if (preset === 'dry') {
+            if (this.reverbMasterGain) {
+                this.reverbMasterGain.gain.setValueAtTime(0, this.ctx.currentTime);
+            }
+            return;
+        }
+
+        const reverbDecay = preset === 'concert' ? 2.8 : preset === 'cathedral' ? 4.5 : preset === 'cosmic' ? 6.0 : 1.8;
+        const impulse = createBinauralImpulseResponse(this.ctx, Math.min(3.5, reverbDecay * 0.8), 2.0 / reverbDecay);
+        this.convolver.buffer = impulse;
+
+        if (this.reverbMasterGain) {
+            this.reverbMasterGain.gain.setValueAtTime(0.22, this.ctx.currentTime);
+        }
+    }
+
+    private playbackMode: 'stereo' | '8d' = 'stereo';
+
+    public setPlaybackMode(mode: 'stereo' | '8d') {
+        this.playbackMode = mode;
+        if (this.ctx) {
+            this.syncTracks(this.cachedTracks, this.cachedGlobalSettings);
+        }
+    }
+
+    public getPlaybackMode(): 'stereo' | '8d' {
+        return this.playbackMode;
+    }
+
+    public syncTracks(tracks: TimelineTrack[], globalSettings?: GlobalSpatialSettings | null) {
         const ctx = this.ensureContext();
+        this.cachedTracks = tracks;
+        if (globalSettings) {
+            this.cachedGlobalSettings = globalSettings;
+            if (globalSettings.reverbPreset) {
+                this.updateReverbBuffer(globalSettings.reverbPreset);
+            }
+        }
+
         const currentIds = new Set(tracks.map(t => t.id));
 
         // Clean up removed tracks
         for (const [id, nodes] of this.trackNodes.entries()) {
             if (!currentIds.has(id)) {
-                nodes.panner.disconnect();
+                nodes.stereoPanner.disconnect();
+                nodes.spatialPanner.disconnect();
+                nodes.reverbSendGain.disconnect();
                 this.trackNodes.delete(id);
             }
         }
 
         // Determine Solo mode
         const hasSolo = tracks.some(t => t.isSolo);
+        const is8DActive = this.playbackMode === '8d' && !(globalSettings?.is8DBypassed);
 
         // Add or update track nodes
         for (const track of tracks) {
@@ -114,19 +220,104 @@ export class TimelineAudioEngine {
                 eqHigh.frequency.setValueAtTime(10000, ctx.currentTime);
 
                 const volumeGain = ctx.createGain();
-                const panner = ctx.createStereoPanner();
 
-                // Chain: input -> eqLow -> eqMid -> eqHigh -> volumeGain -> panner -> limiter
+                // 1. Clean Stereo Route
+                const stereoBusGain = ctx.createGain();
+                const stereoPanner = ctx.createStereoPanner();
+
+                // 2. 8D Spatial Route with Inherent Acoustic Sculpting
+                const spatialBusGain = ctx.createGain();
+
+                const vocalHighPass = ctx.createBiquadFilter();
+                vocalHighPass.type = 'highpass';
+                vocalHighPass.frequency.setValueAtTime(95, ctx.currentTime);
+                vocalHighPass.Q.setValueAtTime(0.7, ctx.currentTime);
+
+                const vocalPresence = ctx.createBiquadFilter();
+                vocalPresence.type = 'peaking';
+                vocalPresence.frequency.setValueAtTime(3200, ctx.currentTime);
+                vocalPresence.Q.setValueAtTime(1.0, ctx.currentTime);
+                vocalPresence.gain.setValueAtTime(1.8, ctx.currentTime);
+
+                const instrumentClarity = ctx.createBiquadFilter();
+                instrumentClarity.type = 'peaking';
+                instrumentClarity.frequency.setValueAtTime(3800, ctx.currentTime);
+                instrumentClarity.Q.setValueAtTime(1.0, ctx.currentTime);
+                instrumentClarity.gain.setValueAtTime(1.8, ctx.currentTime);
+
+                const bassCompressor = ctx.createDynamicsCompressor();
+                bassCompressor.threshold.setValueAtTime(-8.0, ctx.currentTime);
+                bassCompressor.knee.setValueAtTime(6.0, ctx.currentTime);
+                bassCompressor.ratio.setValueAtTime(2.5, ctx.currentTime);
+                bassCompressor.attack.setValueAtTime(0.015, ctx.currentTime);
+                bassCompressor.release.setValueAtTime(0.12, ctx.currentTime);
+
+                // High-fidelity HRTF 3D Panner Node
+                const spatialPanner = ctx.createPanner();
+                spatialPanner.panningModel = 'HRTF';
+                spatialPanner.distanceModel = 'inverse';
+                spatialPanner.refDistance = 1;
+                spatialPanner.maxDistance = 10000;
+                spatialPanner.rolloffFactor = 0.70;
+
+                const reverbSendGain = ctx.createGain();
+                reverbSendGain.gain.setValueAtTime(track.spatialSettings?.reverbWet ?? 0.12, ctx.currentTime);
+
+                // Wire EQ chain: input -> eqLow -> eqMid -> eqHigh -> volumeGain
                 input.connect(eqLow);
                 eqLow.connect(eqMid);
                 eqMid.connect(eqHigh);
                 eqHigh.connect(volumeGain);
-                volumeGain.connect(panner);
+
+                // Wire Stereo Route: volumeGain -> stereoBusGain -> stereoPanner -> limiter
+                volumeGain.connect(stereoBusGain);
+                stereoBusGain.connect(stereoPanner);
                 if (this.limiter) {
-                    panner.connect(this.limiter);
+                    stereoPanner.connect(this.limiter);
                 }
 
-                nodes = { input, eqLow, eqMid, eqHigh, volumeGain, panner };
+                // Wire 8D Spatial Route with Stem-Specific Preprocessing Filters:
+                volumeGain.connect(spatialBusGain);
+
+                const trackNameLower = track.name.toLowerCase();
+                if (trackNameLower.includes('vocal') || trackNameLower.includes('voice') || trackNameLower.includes('sing')) {
+                    spatialBusGain.connect(vocalHighPass);
+                    vocalHighPass.connect(vocalPresence);
+                    vocalPresence.connect(spatialPanner);
+                } else if (trackNameLower.includes('bass') || trackNameLower.includes('drum') || trackNameLower.includes('kick')) {
+                    spatialBusGain.connect(bassCompressor);
+                    bassCompressor.connect(spatialPanner);
+                } else {
+                    spatialBusGain.connect(instrumentClarity);
+                    instrumentClarity.connect(spatialPanner);
+                }
+
+                if (this.limiter) {
+                    spatialPanner.connect(this.limiter);
+                }
+
+                // Reverb send (only from 8D spatial bus)
+                if (this.convolver) {
+                    spatialBusGain.connect(reverbSendGain);
+                    reverbSendGain.connect(this.convolver);
+                }
+
+                nodes = {
+                    input,
+                    eqLow,
+                    eqMid,
+                    eqHigh,
+                    volumeGain,
+                    stereoPanner,
+                    vocalHighPass,
+                    vocalPresence,
+                    instrumentClarity,
+                    bassCompressor,
+                    spatialPanner,
+                    reverbSendGain,
+                    stereoBusGain,
+                    spatialBusGain,
+                };
                 this.trackNodes.set(track.id, nodes);
             }
 
@@ -135,10 +326,78 @@ export class TimelineAudioEngine {
             const targetVolume = isAudible ? (track.volume ?? 1.0) : 0.0;
 
             nodes.volumeGain.gain.setValueAtTime(targetVolume, ctx.currentTime);
-            nodes.panner.pan.setValueAtTime(Math.max(-1, Math.min(1, track.pan ?? 0)), ctx.currentTime);
             nodes.eqLow.gain.setValueAtTime(track.eqLow || 0, ctx.currentTime);
             nodes.eqMid.gain.setValueAtTime(track.eqMid || 0, ctx.currentTime);
             nodes.eqHigh.gain.setValueAtTime(track.eqHigh || 0, ctx.currentTime);
+
+            // Toggle Stereo vs 8D routes seamlessly
+            if (is8DActive) {
+                nodes.stereoBusGain.gain.setValueAtTime(0, ctx.currentTime);
+                nodes.spatialBusGain.gain.setValueAtTime(1, ctx.currentTime);
+                const reverbWet = track.spatialSettings?.reverbWet ?? 0.16;
+                nodes.reverbSendGain.gain.setValueAtTime(reverbWet, ctx.currentTime);
+            } else {
+                nodes.stereoBusGain.gain.setValueAtTime(1, ctx.currentTime);
+                nodes.spatialBusGain.gain.setValueAtTime(0, ctx.currentTime);
+                nodes.reverbSendGain.gain.setValueAtTime(0, ctx.currentTime);
+                nodes.stereoPanner.pan.setValueAtTime(Math.max(-1, Math.min(1, track.pan ?? 0)), ctx.currentTime);
+            }
+        }
+
+        if (is8DActive) {
+            this.updateSpatialPositions(this.getCurrentTime());
+        }
+    }
+
+    /**
+     * Real-time 8D Audio HRTF Trajectory Calculator
+     * Modulates 360° soundstage coordinates on every playback frame (only in 8D mode)
+     */
+    public updateSpatialPositions(currentTime: number) {
+        if (!this.ctx || this.playbackMode !== '8d') return;
+
+        const globalSettings = this.cachedGlobalSettings;
+        const isBypassed = globalSettings?.is8DBypassed ?? false;
+        const masterSpeed = globalSettings?.masterSpeedMultiplier || 1.0;
+        const masterSpread = globalSettings?.masterSpread || 1.0;
+
+        for (const track of this.cachedTracks) {
+            const nodes = this.trackNodes.get(track.id);
+            if (!nodes) continue;
+
+            const spatial = track.spatialSettings;
+
+            if (isBypassed || !spatial || spatial.isCenterLocked || spatial.pattern === 'static-center' || spatial.radius < 0.1) {
+                // Grounded Center
+                nodes.spatialPanner.positionX.setValueAtTime(0, this.ctx.currentTime);
+                nodes.spatialPanner.positionY.setValueAtTime(0, this.ctx.currentTime);
+                nodes.spatialPanner.positionZ.setValueAtTime(-1, this.ctx.currentTime);
+            } else {
+                // Dynamic 360° 8D Orbit
+                const effectiveSpeed = Math.max(1, (spatial.speedSeconds || 10) / masterSpeed);
+                const direction = spatial.direction || 1;
+                const theta = (currentTime / effectiveSpeed) * (2 * Math.PI) * direction;
+                const r = (spatial.radius || 2.5) * masterSpread;
+
+                let x = 0;
+                let y = 0;
+                let z = 0;
+
+                if (spatial.pattern === 'front-ellipse') {
+                    x = r * Math.sin(theta);
+                    z = -(Math.abs(r * Math.cos(theta) * 0.7) + 0.5);
+                    y = (spatial.elevation || 0.2) * Math.sin(theta * 0.5);
+                } else {
+                    x = r * Math.sin(theta);
+                    z = -r * Math.cos(theta);
+                    y = (spatial.elevation || 0.2) * Math.sin(theta * 2);
+                }
+
+                // Update HRTF spatial coordinates smoothly
+                nodes.spatialPanner.positionX.setValueAtTime(x, this.ctx.currentTime);
+                nodes.spatialPanner.positionY.setValueAtTime(y, this.ctx.currentTime);
+                nodes.spatialPanner.positionZ.setValueAtTime(z, this.ctx.currentTime);
+            }
         }
     }
 
@@ -148,12 +407,13 @@ export class TimelineAudioEngine {
         tracks: TimelineTrack[],
         totalDuration: number,
         onTimeUpdate?: (time: number) => void,
-        onEnded?: () => void
+        onEnded?: () => void,
+        globalSettings?: GlobalSpatialSettings
     ) {
         const ctx = this.ensureContext();
         this.stopSources();
 
-        this.syncTracks(tracks);
+        this.syncTracks(tracks, globalSettings);
         this.totalDuration = totalDuration;
         this.timelineStartOffset = Math.max(0, fromTimelineTime);
         this.playbackStartTime = ctx.currentTime;
@@ -179,7 +439,7 @@ export class TimelineAudioEngine {
 
             try {
                 const buffer = await getOrFetchAudioBuffer(clip.audioUrl, ctx);
-                if (!this.isPlaying) return; // If stopped during async fetch
+                if (!this.isPlaying) return;
 
                 const source = ctx.createBufferSource();
                 source.buffer = buffer;
@@ -228,13 +488,23 @@ export class TimelineAudioEngine {
         newTime: number,
         clips: TimelineClip[],
         tracks: TimelineTrack[],
-        totalDuration: number
+        totalDuration: number,
+        globalSettings?: GlobalSpatialSettings
     ) {
         const wasPlaying = this.isPlaying;
         if (wasPlaying) {
-            this.play(newTime, clips, tracks, totalDuration, this.onTimeUpdateCallback || undefined, this.onEndedCallback || undefined);
+            this.play(
+                newTime,
+                clips,
+                tracks,
+                totalDuration,
+                this.onTimeUpdateCallback || undefined,
+                this.onEndedCallback || undefined,
+                globalSettings
+            );
         } else {
             this.timelineStartOffset = newTime;
+            this.updateSpatialPositions(newTime);
         }
     }
 
@@ -278,7 +548,6 @@ export class TimelineAudioEngine {
         }
 
         const avg = sum / count;
-        // Dynamic, responsive stereo peak/RMS metering
         const left = Math.min(1.0, avg * 2.2 + peak * 0.15);
         const right = Math.min(1.0, avg * 2.1 + peak * 0.2);
         return {
@@ -308,6 +577,7 @@ export class TimelineAudioEngine {
             if (!this.isPlaying) return;
 
             const time = this.getCurrentTime();
+            this.updateSpatialPositions(time);
             this.onTimeUpdateCallback?.(time);
 
             if (this.totalDuration > 0 && time >= this.totalDuration) {
