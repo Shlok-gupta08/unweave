@@ -59,31 +59,55 @@ function broadcastEngineStatus(updates = {}) {
 }
 
 function findSystemPython() {
-  const candidates = [
-    'python3',
-    '/opt/homebrew/bin/python3',
-    '/usr/local/bin/python3',
-    '/usr/bin/python3',
-    'python'
-  ];
+  const isWin = process.platform === 'win32';
+  const candidates = isWin
+    ? [
+        'py',
+        'python',
+        'python3',
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'python.exe'),
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'python.exe'),
+        path.join(process.env.ProgramFiles || '', 'Python311', 'python.exe'),
+        path.join(process.env.ProgramFiles || '', 'Python312', 'python.exe')
+      ]
+    : [
+        'python3',
+        '/opt/homebrew/bin/python3',
+        '/usr/local/bin/python3',
+        '/usr/bin/python3',
+        'python'
+      ];
+
   for (const cmd of candidates) {
     try {
-      const res = require('child_process').spawnSync(cmd, ['--version'], { encoding: 'utf8' });
+      const args = cmd === 'py' ? ['-3', '--version'] : ['--version'];
+      const res = require('child_process').spawnSync(cmd, args, {
+        encoding: 'utf8',
+        windowsHide: true
+      });
       if (res.status === 0) {
-        return cmd;
+        return cmd === 'py' ? 'py -3' : cmd;
       }
     } catch {
       // Continue searching
     }
   }
-  return 'python3';
+  return isWin ? 'python' : 'python3';
 }
 
 function runCommand(cmd, args, onData) {
   return new Promise((resolve, reject) => {
-    console.log(`[Runtime Manager] Running: ${cmd} ${args.join(' ')}`);
-    const proc = spawn(cmd, args, {
+    let actualCmd = cmd;
+    let actualArgs = args;
+    if (cmd === 'py -3') {
+      actualCmd = 'py';
+      actualArgs = ['-3', ...args];
+    }
+    console.log(`[Runtime Manager] Running: ${actualCmd} ${actualArgs.join(' ')}`);
+    const proc = spawn(actualCmd, actualArgs, {
       env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      windowsHide: true,
+      shell: process.platform === 'win32',
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -123,6 +147,8 @@ async function verifyVenvHealth() {
 
   return new Promise((resolve) => {
     const proc = spawn(pyToTest, ['-c', 'import torch, demucs, fastapi, uvicorn; print("OK")'], {
+      windowsHide: true,
+      shell: process.platform === 'win32',
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let out = '';
@@ -622,15 +648,16 @@ function buildMacMenu() {
 // Create MainWindow
 // ──────────────────────────────────────────────
 async function createMainWindow() {
-  mainWindow = new BrowserWindow({
+  const isMac = process.platform === 'darwin';
+  const isWin = process.platform === 'win32';
+
+  const windowOptions = {
     width: 1440,
     height: 920,
     minWidth: 1024,
     minHeight: 700,
     title: 'Unweave Studio',
     backgroundColor: '#09090b',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 14 },
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -638,7 +665,21 @@ async function createMainWindow() {
       nodeIntegration: false,
       webSecurity: true
     }
-  });
+  };
+
+  if (isMac) {
+    windowOptions.titleBarStyle = 'hiddenInset';
+    windowOptions.trafficLightPosition = { x: 16, y: 14 };
+  } else if (isWin) {
+    windowOptions.titleBarStyle = 'hidden';
+    windowOptions.titleBarOverlay = {
+      color: '#000000',
+      symbolColor: '#e4e4e7',
+      height: 42
+    };
+  }
+
+  mainWindow = new BrowserWindow(windowOptions);
 
   buildMacMenu();
 

@@ -9,7 +9,8 @@
     "install:all": "npm install --prefix frontend && npm install --prefix desktop && cd backend && .venv/bin/pip install -r requirements.txt",
     "desktop:dev": "npm start --prefix desktop",
     "desktop:dmg": "bash scripts/package-mac.sh",
-    "desktop:app": "bash scripts/package-mac.sh"
+    "desktop:app": "bash scripts/package-mac.sh",
+    "desktop:win": "bash scripts/package-win.sh"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

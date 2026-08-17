@@ -52,24 +52,25 @@ unweave/
 ├── backend/                   # Python 3.11 + FastAPI + Demucs AI Engine
 │   ├── main.py                # REST API, health checker & job supervisor
 │   ├── worker.py              # Sequential Demucs execution queue worker
-│   ├── run_embedded_backend.sh# Embedded backend launcher for standalone app bundle
 │   ├── requirements.txt       # Python dependencies (PyTorch, Demucs, FastAPI)
 │   ├── Dockerfile             # NVIDIA CUDA container image
 │   ├── Dockerfile.cpu         # Lightweight CPU container image
 │   └── Dockerfile.rocm        # AMD ROCm container image
-├── desktop/                   # Electron Standalone macOS Application
-│   ├── main.js                # Process lifecycle, native macOS menu bar & IPC
+├── desktop/                   # Electron Desktop Application (macOS & Windows)
+│   ├── main.js                # Process lifecycle, native menu bar & IPC bridge
 │   ├── preload.js             # Context bridge for persistent project storage
 │   └── package.json           # Electron application manifest
 ├── scripts/                   # Automated OS installers & desktop packagers
 │   ├── package-mac.sh         # Standalone macOS .app & .dmg packaging script
+│   ├── package-win.sh         # Standalone Windows .exe & portable zip packager
 │   ├── install-mac.sh         # 1-click macOS setup script
 │   ├── install.sh             # 1-click Linux setup script
 │   └── install.ps1            # 1-click Windows setup script
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml         # CI/CD deployment workflow
-├── dist-desktop/              # Packaged macOS App & DMG binaries (git-ignored)
+│       ├── deploy.yml         # Azure CI/CD deployment workflow (paused)
+│       └── release-dmg.yml     # Automated macOS & Windows Release Packager
+├── dist-desktop/              # Packaged macOS & Windows binaries (git-ignored)
 ├── docker-compose.yml         # Multi-container orchestration (GPU / CPU)
 ├── package.json               # Root workspace scripts
 ├── CONTRIBUTING.md            # Contribution guidelines

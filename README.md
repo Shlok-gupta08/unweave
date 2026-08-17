@@ -109,7 +109,6 @@ Unweave/
 │   ├── main.py                     # API routes, health check, job supervisor
 │   ├── worker.py                   # Sequential Demucs execution & stem extraction
 │   ├── requirements.txt            # Python dependencies (PyTorch, Demucs, FastAPI)
-│   ├── run_embedded_backend.sh     # Embedded runtime launcher for desktop bundle
 │   ├── Dockerfile                  # CUDA/GPU Container definition
 │   ├── Dockerfile.cpu              # CPU-only Container definition
 │   └── Dockerfile.rocm             # AMD ROCm Container definition
@@ -122,7 +121,7 @@ Unweave/
 │   │   │   ├── mixer/              # Live Mixer Console, dB Faders & VU Meters
 │   │   │   ├── spatial/            # 360° 8D Spatial Mixer & Radar Canvas
 │   │   │   ├── export/             # Lossless WAV & MP3 mixdown / ZIP export
-│   │   │   ├── modals/             # Project Manager & Recovery dialogs
+│   │   │   ├── modals/             # Project Manager, Recovery & Engine Setup dialogs
 │   │   │   └── navigation/         # Responsive bottom tabs & header
 │   │   ├── context/
 │   │   │   ├── TimelineContext.tsx # DAW state, tracks, clips, history & shortcuts
@@ -141,23 +140,27 @@ Unweave/
 │   └── vite.config.ts
 │
 ├── desktop/                        # Electron Desktop Application
-│   ├── main.js                     # Electron lifecycle, native macOS menu & IPC
+│   ├── main.js                     # Electron lifecycle, native macOS/Win menu & IPC
 │   ├── preload.js                  # Secure context bridge for storage & menus
 │   └── package.json                # Desktop runtime configuration
 │
 ├── scripts/                        # Build & Packaging Utilities
 │   ├── package-mac.sh              # Standalone macOS .app & .dmg packaging script
+│   ├── package-win.sh              # Standalone Windows .exe & portable zip packager
 │   ├── install-mac.sh              # 1-click macOS setup script
 │   ├── install.sh                  # 1-click Linux setup script
 │   └── install.ps1                 # 1-click Windows setup script
 │
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml              # CI/CD deployment workflow (paused / on-demand)
+│       ├── deploy.yml              # Azure CI/CD deployment workflow (paused)
+│       └── release-dmg.yml         # Automated macOS & Windows Release Packager
 │
 ├── dist-desktop/                   # Packaged Desktop Artifacts (ignored by git)
 │   ├── Unweave.app                 # macOS Application bundle
-│   └── Unweave.dmg                 # macOS Installer disk image
+│   ├── Unweave.dmg                 # macOS Installer disk image (102 MB)
+│   ├── Unweave-win32-x64/          # Windows Application Directory
+│   └── Unweave-Windows-x64.zip     # Windows Portable Distribution Package (129 MB)
 │
 ├── docker-compose.yml              # Multi-container orchestration (GPU / CPU)
 ├── package.json                    # Workspace root scripts
@@ -203,18 +206,27 @@ Unweave/
 
 ---
 
-## 📦 Native macOS Desktop App & DMG
+## 📦 Native Desktop Applications (macOS & Windows)
 
-Build the standalone macOS App bundle and custom `.dmg` installer with embedded Python AI runtime:
-
+### macOS (.app & .dmg)
+Build the standalone macOS App bundle and lightweight `.dmg` installer with on-demand AI runtime:
 ```bash
-# Build macOS .app and .dmg installer
-bash scripts/package-mac.sh
+npm run desktop:dmg
+# or: bash scripts/package-mac.sh
 ```
-
 **Output:**
 - `dist-desktop/Unweave.app` (Standalone macOS App Bundle)
-- `dist-desktop/Unweave.dmg` (Installer Disk Image)
+- `dist-desktop/Unweave.dmg` (Installer Disk Image — 102 MB)
+
+### Windows (.exe & Portable ZIP)
+Build the standalone Windows executable and portable distribution archive:
+```bash
+npm run desktop:win
+# or: bash scripts/package-win.sh
+```
+**Output:**
+- `dist-desktop/Unweave-win32-x64/Unweave.exe` (Windows Executable)
+- `dist-desktop/Unweave-Windows-x64.zip` (Portable Package — 129 MB)
 
 ---
 

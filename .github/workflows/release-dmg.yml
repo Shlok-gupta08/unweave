@@ -1,4 +1,4 @@
-name: Build & Release macOS DMG
+name: Build & Release Desktop Apps (macOS & Windows)
 
 on:
   push:
@@ -15,8 +15,8 @@ permissions:
   contents: write
 
 jobs:
-  build-macos-dmg:
-    name: Build macOS DMG
+  build-and-release:
+    name: Build & Release Desktop Installers
     runs-on: macos-latest
     timeout-minutes: 30
 
@@ -46,12 +46,18 @@ jobs:
         run: |
           bash scripts/package-mac.sh
 
-      - name: Verify DMG Artifact
+      - name: Package Windows App (.exe) Distribution
+        run: |
+          bash scripts/package-win.sh
+
+      - name: Verify Release Artifacts
         run: |
           ls -lh dist-desktop/Unweave.dmg
-          echo "DMG Size: $(du -sh dist-desktop/Unweave.dmg | cut -f1)"
+          ls -lh dist-desktop/Unweave-Windows-x64.zip
+          echo "macOS DMG Size: $(du -sh dist-desktop/Unweave.dmg | cut -f1)"
+          echo "Windows ZIP Size: $(du -sh dist-desktop/Unweave-Windows-x64.zip | cut -f1)"
 
-      - name: Publish DMG to GitHub Release
+      - name: Publish macOS DMG & Windows Package to GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
@@ -62,5 +68,7 @@ jobs:
           generate_release_notes: true
           files: |
             dist-desktop/Unweave.dmg
+            dist-desktop/Unweave-Windows-x64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
