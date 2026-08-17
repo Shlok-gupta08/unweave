@@ -35,12 +35,222 @@ function checkBackendHealth() {
 }
 
 // ──────────────────────────────────────────────
+// Runtime & Environment Paths
+// ──────────────────────────────────────────────
+const RUNTIME_DIR = path.join(app.getPath('userData'), 'runtime');
+const VENV_DIR = path.join(RUNTIME_DIR, 'venv');
+const VENV_PYTHON = process.platform === 'win32'
+  ? path.join(VENV_DIR, 'Scripts', 'python.exe')
+  : path.join(VENV_DIR, 'bin', 'python');
+
+let engineState = {
+  status: 'checking', // 'ready' | 'needs-setup' | 'installing' | 'error'
+  progress: 0,
+  step: 'Checking AI Engine...',
+  detail: '',
+  logs: []
+};
+
+function broadcastEngineStatus(updates = {}) {
+  Object.assign(engineState, updates);
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('engine:status-update', engineState);
+  }
+}
+
+function findSystemPython() {
+  const candidates = [
+    'python3',
+    '/opt/homebrew/bin/python3',
+    '/usr/local/bin/python3',
+    '/usr/bin/python3',
+    'python'
+  ];
+  for (const cmd of candidates) {
+    try {
+      const res = require('child_process').spawnSync(cmd, ['--version'], { encoding: 'utf8' });
+      if (res.status === 0) {
+        return cmd;
+      }
+    } catch {
+      // Continue searching
+    }
+  }
+  return 'python3';
+}
+
+function runCommand(cmd, args, onData) {
+  return new Promise((resolve, reject) => {
+    console.log(`[Runtime Manager] Running: ${cmd} ${args.join(' ')}`);
+    const proc = spawn(cmd, args, {
+      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    proc.stdout.on('data', (data) => {
+      const text = data.toString();
+      console.log(`[Setup stdout] ${text.trim()}`);
+      if (onData) onData(text);
+      engineState.logs.push(text.trim());
+      if (engineState.logs.length > 200) engineState.logs.shift();
+      broadcastEngineStatus();
+    });
+
+    proc.stderr.on('data', (data) => {
+      const text = data.toString();
+      console.log(`[Setup stderr] ${text.trim()}`);
+      if (onData) onData(text);
+      engineState.logs.push(text.trim());
+      if (engineState.logs.length > 200) engineState.logs.shift();
+      broadcastEngineStatus();
+    });
+
+    proc.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Command ${cmd} exited with code ${code}`));
+    });
+
+    proc.on('error', (err) => reject(err));
+  });
+}
+
+async function verifyVenvHealth() {
+  const pyToTest = isDev && fs.existsSync(path.join(__dirname, '..', 'backend', '.venv', 'bin', 'python'))
+    ? path.join(__dirname, '..', 'backend', '.venv', 'bin', 'python')
+    : VENV_PYTHON;
+
+  if (!fs.existsSync(pyToTest)) return false;
+
+  return new Promise((resolve) => {
+    const proc = spawn(pyToTest, ['-c', 'import torch, demucs, fastapi, uvicorn; print("OK")'], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    let out = '';
+    proc.stdout.on('data', (d) => { out += d.toString(); });
+    proc.on('close', (code) => {
+      resolve(code === 0 && out.includes('OK'));
+    });
+    proc.on('error', () => resolve(false));
+    setTimeout(() => {
+      try { proc.kill(); } catch {}
+      resolve(false);
+    }, 6000);
+  });
+}
+
+// ──────────────────────────────────────────────
+// Automated AI Runtime Provisioner
+// ──────────────────────────────────────────────
+async function installRuntime() {
+  if (engineState.status === 'installing') return;
+
+  broadcastEngineStatus({
+    status: 'installing',
+    progress: 5,
+    step: 'Initializing AI Engine...',
+    detail: 'Setting up dedicated environment in Application Support...',
+    logs: ['[Setup] Starting AI Engine initialization...']
+  });
+
+  try {
+    if (!fs.existsSync(RUNTIME_DIR)) fs.mkdirSync(RUNTIME_DIR, { recursive: true });
+
+    const systemPython = findSystemPython();
+    broadcastEngineStatus({
+      progress: 15,
+      step: 'Creating Python virtual environment...',
+      detail: `Setting up isolated environment (${systemPython})...`,
+      logs: [...engineState.logs, `[Setup] Creating virtual environment at ${VENV_DIR}...`]
+    });
+
+    // 1. Create Virtualenv if missing
+    if (!fs.existsSync(VENV_PYTHON)) {
+      await runCommand(systemPython, ['-m', 'venv', VENV_DIR]);
+    }
+
+    // 2. Upgrade pip
+    broadcastEngineStatus({
+      progress: 30,
+      step: 'Updating package installer (pip)...',
+      detail: 'Configuring package manager...',
+      logs: [...engineState.logs, '[Setup] Upgrading pip...']
+    });
+    try {
+      await runCommand(VENV_PYTHON, ['-m', 'pip', 'install', '--upgrade', 'pip', '--no-warn-script-location']);
+    } catch {
+      // Continue if pip upgrade fails
+    }
+
+    // 3. Install Requirements
+    const backendDir = isDev
+      ? path.join(__dirname, '..', 'backend')
+      : path.join(process.resourcesPath, 'backend');
+
+    const reqFile = path.join(backendDir, 'requirements.txt');
+
+    broadcastEngineStatus({
+      progress: 50,
+      step: 'Installing PyTorch & Demucs AI Engine...',
+      detail: 'Downloading neural network dependencies (~1-2 minutes on first run)...',
+      logs: [...engineState.logs, `[Setup] Installing packages...`]
+    });
+
+    if (fs.existsSync(reqFile)) {
+      await runCommand(VENV_PYTHON, ['-m', 'pip', 'install', '-r', reqFile, '--no-warn-script-location']);
+    } else {
+      await runCommand(VENV_PYTHON, ['-m', 'pip', 'install', 'fastapi', 'uvicorn', 'torch', 'torchaudio', 'demucs', 'pydantic', 'python-multipart', 'numpy', 'scipy', 'imageio-ffmpeg', '--no-warn-script-location']);
+    }
+
+    // 4. Verify installation
+    broadcastEngineStatus({
+      progress: 90,
+      step: 'Verifying AI Engine health & hardware acceleration...',
+      detail: 'Checking Apple Silicon Metal (MPS) / CUDA acceleration...',
+      logs: [...engineState.logs, '[Setup] Verifying imports...']
+    });
+
+    const isHealthy = await verifyVenvHealth();
+    if (!isHealthy) {
+      throw new Error('AI Engine packages installed but verification test failed.');
+    }
+
+    // 5. Start Backend
+    broadcastEngineStatus({
+      progress: 98,
+      step: 'Starting local backend server...',
+      detail: 'Launching API daemon on port 8010...',
+      logs: [...engineState.logs, '[Setup] Starting backend daemon...']
+    });
+
+    await startBackendSupervisor();
+
+    broadcastEngineStatus({
+      status: 'ready',
+      progress: 100,
+      step: 'AI Engine Ready!',
+      detail: 'Unweave Studio is ready to separate stems.',
+      logs: [...engineState.logs, '[Setup] Setup completed successfully!']
+    });
+  } catch (err) {
+    console.error('[Unweave Desktop] Installation error:', err);
+    broadcastEngineStatus({
+      status: 'error',
+      progress: 0,
+      step: 'Setup encountered an issue',
+      detail: err.message || 'Failed to install AI Engine dependencies.',
+      logs: [...engineState.logs, `[Error] ${err.message}`]
+    });
+  }
+}
+
+// ──────────────────────────────────────────────
 // Backend Process Supervisor
 // ──────────────────────────────────────────────
 async function startBackendSupervisor() {
   const isRunning = await checkBackendHealth();
   if (isRunning) {
     console.log('[Unweave Desktop] Backend is already running on port', BACKEND_PORT);
+    broadcastEngineStatus({ status: 'ready', progress: 100, step: 'AI Engine Ready' });
     return;
   }
 
@@ -48,37 +258,38 @@ async function startBackendSupervisor() {
     ? path.join(__dirname, '..', 'backend')
     : path.join(process.resourcesPath, 'backend');
 
-  const embeddedScript = path.join(backendDir, 'run_embedded_backend.sh');
-  const embeddedPy = path.join(backendDir, 'python', 'Frameworks', 'Python.framework', 'Versions', '3.11', 'bin', 'python3.11');
-  const localVenvPy = path.join(backendDir, '.venv', 'bin', 'python');
+  const devVenvPy = path.join(backendDir, '.venv', 'bin', 'python');
   const devWorkspacePy = path.join(process.env.HOME || '', 'Workspace', 'Projects', 'Unweave', 'backend', '.venv', 'bin', 'python');
 
   let launchCmd = null;
-  let launchArgs = [];
 
-  if (fs.existsSync(embeddedScript)) {
-    launchCmd = '/bin/bash';
-    launchArgs = [embeddedScript];
-  } else if (fs.existsSync(embeddedPy)) {
-    launchCmd = embeddedPy;
-    launchArgs = ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
-  } else if (fs.existsSync(localVenvPy)) {
-    launchCmd = localVenvPy;
-    launchArgs = ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
-  } else if (fs.existsSync(devWorkspacePy)) {
+  if (isDev && fs.existsSync(devVenvPy)) {
+    launchCmd = devVenvPy;
+  } else if (isDev && fs.existsSync(devWorkspacePy)) {
     launchCmd = devWorkspacePy;
-    launchArgs = ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
+  } else if (fs.existsSync(VENV_PYTHON)) {
+    launchCmd = VENV_PYTHON;
   }
 
   if (!launchCmd) {
-    console.log('[Unweave Desktop] No local or embedded backend runtime found.');
+    console.log('[Unweave Desktop] No verified virtual environment found. Requesting setup...');
+    broadcastEngineStatus({
+      status: 'needs-setup',
+      progress: 0,
+      step: 'First-Launch Setup Required',
+      detail: 'Click "Initialize AI Engine" to set up Python and Demucs.'
+    });
+    // Auto-trigger setup on first launch
+    setTimeout(() => {
+      installRuntime().catch(() => {});
+    }, 1200);
     return;
   }
 
   console.log(`[Unweave Desktop] Starting AI Backend process: ${launchCmd} in ${backendDir}...`);
 
   try {
-    backendProcess = spawn(launchCmd, launchArgs, {
+    backendProcess = spawn(launchCmd, ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)], {
       cwd: backendDir,
       env: { ...process.env, PYTHONUNBUFFERED: '1' },
       stdio: ['ignore', 'pipe', 'pipe']
@@ -87,6 +298,7 @@ async function startBackendSupervisor() {
     backendProcess.on('error', (err) => {
       console.warn('[Unweave Desktop] Backend spawn error:', err.message);
       backendProcess = null;
+      broadcastEngineStatus({ status: 'error', detail: err.message });
     });
 
     backendProcess.stdout.on('data', (data) => {
@@ -102,17 +314,19 @@ async function startBackendSupervisor() {
       backendProcess = null;
     });
 
-    // Wait up to 20 seconds for backend to be fully online and responsive
-    for (let i = 0; i < 40; i++) {
+    // Wait up to 25 seconds for backend to be fully online
+    for (let i = 0; i < 50; i++) {
       await new Promise((r) => setTimeout(r, 500));
       const ok = await checkBackendHealth();
       if (ok) {
         console.log('[Unweave Desktop] AI Backend is online and ready.');
+        broadcastEngineStatus({ status: 'ready', progress: 100, step: 'AI Engine Ready' });
         break;
       }
     }
   } catch (err) {
     console.warn('[Unweave Desktop] Could not start local Python backend:', err.message);
+    broadcastEngineStatus({ status: 'error', detail: err.message });
   }
 }
 
@@ -361,6 +575,20 @@ function buildMacMenu() {
       role: 'help',
       submenu: [
         {
+          label: 'Setup / Repair AI Engine...',
+          click: () => {
+            sendMenuAction('open-engine-setup');
+            installRuntime().catch(() => {});
+          }
+        },
+        {
+          label: 'Open Unweave Data Folder',
+          click: async () => {
+            await shell.openPath(app.getPath('userData'));
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'Unweave Documentation',
           click: async () => {
             await shell.openExternal('https://github.com/Shlok-gupta08/unweave#readme');
@@ -567,6 +795,26 @@ ipcMain.handle('project:open-projects-folder', async () => {
 ipcMain.handle('project:get-projects-path', async () => {
   ensureProjectDirs();
   return PROJECTS_DIR;
+});
+
+// Engine Runtime Setup IPC APIs
+ipcMain.handle('engine:get-status', async () => {
+  return engineState;
+});
+
+ipcMain.handle('engine:start-install', async () => {
+  installRuntime().catch(() => {});
+  return { success: true };
+});
+
+ipcMain.handle('engine:repair', async () => {
+  try {
+    fs.rmSync(VENV_DIR, { recursive: true, force: true });
+  } catch (err) {
+    console.warn('[Unweave Desktop] Could not clean venv:', err.message);
+  }
+  installRuntime().catch(() => {});
+  return { success: true };
 });
 
 // ──────────────────────────────────────────────

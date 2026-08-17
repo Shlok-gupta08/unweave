@@ -23,4 +23,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearAutoSave: () => ipcRenderer.invoke('project:clear-autosave'),
   openProjectsFolder: () => ipcRenderer.invoke('project:open-projects-folder'),
   getProjectsPath: () => ipcRenderer.invoke('project:get-projects-path'),
+  // Dedicated AI Engine Setup APIs
+  getEngineStatus: () => ipcRenderer.invoke('engine:get-status'),
+  startEngineInstall: () => ipcRenderer.invoke('engine:start-install'),
+  repairEngine: () => ipcRenderer.invoke('engine:repair'),
+  onEngineStatus: (callback) => {
+    const subscription = (_event, state) => callback(state);
+    ipcRenderer.on('engine:status-update', subscription);
+    return () => ipcRenderer.removeListener('engine:status-update', subscription);
+  },
 });

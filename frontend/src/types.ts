@@ -138,6 +138,14 @@ export interface AutoSaveInfo {
     meta?: AutoSaveMeta;
 }
 
+export interface EngineState {
+    status: 'checking' | 'ready' | 'needs-setup' | 'installing' | 'error';
+    progress: number;
+    step: string;
+    detail?: string;
+    logs: string[];
+}
+
 declare global {
     interface Window {
         electronAPI?: {
@@ -154,6 +162,10 @@ declare global {
             clearAutoSave?: () => Promise<{ success: boolean }>;
             openProjectsFolder?: () => Promise<{ success: boolean; path: string }>;
             getProjectsPath?: () => Promise<string>;
+            getEngineStatus?: () => Promise<EngineState>;
+            startEngineInstall?: () => Promise<{ success: boolean }>;
+            repairEngine?: () => Promise<{ success: boolean }>;
+            onEngineStatus?: (callback: (state: EngineState) => void) => () => void;
         };
     }
 }

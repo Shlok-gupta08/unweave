@@ -11,9 +11,10 @@ import { Spatial8DMixerWorkspace } from './components/spatial/Spatial8DMixerWork
 import { ExportWorkspace } from './components/export/ExportWorkspace';
 import { ProjectRecoveryModal } from './components/modals/ProjectRecoveryModal';
 import { ProjectManagerModal } from './components/modals/ProjectManagerModal';
+import { EngineSetupModal } from './components/modals/EngineSetupModal';
 import { projectStorage } from './services/projectStorage';
 import { audioEngine } from './services/audioEngine';
-import type { WorkspaceTab, AutoSaveInfo } from './types';
+import type { WorkspaceTab, AutoSaveInfo, EngineState } from './types';
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('separate');
@@ -22,6 +23,8 @@ function AppContent() {
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [isGlobalProjectModalOpen, setIsGlobalProjectModalOpen] = useState(false);
   const [globalProjectModalMode, setGlobalProjectModalMode] = useState<'manage' | 'save-as' | 'open'>('manage');
+  const [engineState, setEngineState] = useState<EngineState | null>(null);
+  const [showEngineModal, setShowEngineModal] = useState(false);
 
   const {
     processingMode,
@@ -40,6 +43,33 @@ function AppContent() {
   const scrollRafRef = useRef(false);
   const hasCheckedAutoSaveRef = useRef(false);
   const isDesktop = typeof window !== 'undefined' && Boolean(window.electronAPI?.isDesktop);
+
+  // Monitor desktop AI engine state and first-launch setup
+  useEffect(() => {
+    if (isDesktop && window.electronAPI?.getEngineStatus) {
+      window.electronAPI.getEngineStatus().then((state) => {
+        setEngineState(state);
+        if (state.status === 'needs-setup' || state.status === 'installing' || state.status === 'error') {
+          setShowEngineModal(true);
+        }
+      }).catch(() => {});
+
+      if (window.electronAPI.onEngineStatus) {
+        const unsub = window.electronAPI.onEngineStatus((state) => {
+          setEngineState(state);
+          if (state.status === 'needs-setup' || state.status === 'installing' || state.status === 'error') {
+            setShowEngineModal(true);
+          } else if (state.status === 'ready') {
+            setTimeout(() => {
+              setShowEngineModal(false);
+              recheckGpuHealth().catch(() => {});
+            }, 1200);
+          }
+        });
+        return unsub;
+      }
+    }
+  }, [isDesktop, recheckGpuHealth]);
 
   // Check for auto-saved project session strictly ONCE on initial cold start
   useEffect(() => {
@@ -138,6 +168,8 @@ function AppContent() {
         } else if (action === 'open-project-manager') {
           setGlobalProjectModalMode('manage');
           setIsGlobalProjectModalOpen(true);
+        } else if (action === 'open-engine-setup') {
+          setShowEngineModal(true);
         }
       });
       return unsubscribe;
@@ -362,6 +394,16 @@ function AppContent() {
         onClose={() => setIsGlobalProjectModalOpen(false)}
         initialMode={globalProjectModalMode}
       />
+
+      {/* Desktop AI Engine First-Launch Setup / Maintenance Modal */}
+      {showEngineModal && engineState && (
+        <EngineSetupModal
+          engineState={engineState}
+          onStartInstall={() => window.electronAPI?.startEngineInstall?.()}
+          onRepair={() => window.electronAPI?.repairEngine?.()}
+          onClose={() => setShowEngineModal(false)}
+        />
+      )}
     </div>
   );
 }
