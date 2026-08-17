@@ -165,7 +165,17 @@ async function installRuntime() {
 
     // 1. Create Virtualenv if missing
     if (!fs.existsSync(VENV_PYTHON)) {
-      await runCommand(systemPython, ['-m', 'venv', VENV_DIR]);
+      try {
+        await runCommand(systemPython, ['-m', 'venv', VENV_DIR]);
+      } catch (venvErr) {
+        console.warn('[Setup] Standard venv creation failed, trying with ensurepip fallback...', venvErr);
+        await runCommand(systemPython, ['-m', 'venv', '--without-pip', VENV_DIR]);
+        try {
+          await runCommand(systemPython, ['-m', 'ensurepip', '--upgrade']);
+        } catch {
+          // Continue
+        }
+      }
     }
 
     // 2. Upgrade pip

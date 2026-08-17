@@ -1,19 +1,10 @@
 import os
 import sys
 
-# Auto-activate Python 3.11 virtual environment or embedded framework if run under wrong interpreter
+# Ensure local directories and paths are available
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-_embedded_py = os.path.join(_script_dir, "python", "Frameworks", "Python.framework", "Versions", "3.11", "bin", "python3.11")
-_venv_bin = os.path.join(_script_dir, ".venv", "bin" if sys.platform != "win32" else "Scripts")
-_venv_python = os.path.join(_venv_bin, "python" + (".exe" if sys.platform == "win32" else ""))
-
-if os.path.exists(_embedded_py) and os.path.realpath(sys.executable) != os.path.realpath(_embedded_py):
-    _site_pkg = os.path.join(_script_dir, "python", "lib", "python3.11", "site-packages")
-    os.environ["PYTHONPATH"] = f"{_site_pkg}:{_script_dir}"
-    os.environ["PYTHONHOME"] = os.path.join(_script_dir, "python", "Frameworks", "Python.framework", "Versions", "3.11")
-    os.execv(_embedded_py, [_embedded_py] + sys.argv)
-elif os.path.exists(_venv_python) and os.path.realpath(sys.executable) != os.path.realpath(_venv_python):
-    os.execv(_venv_python, [_venv_python] + sys.argv)
+if _script_dir not in sys.path:
+    sys.path.insert(0, _script_dir)
 
 try:
     from audio_separator.separator import Separator  # type: ignore
