@@ -7,14 +7,10 @@
   "author": "Unweave",
   "license": "MIT",
   "scripts": {
-    "start": "electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder",
-    "dist:dmg": "electron-builder --mac dmg"
+    "start": "electron ."
   },
   "devDependencies": {
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8"
+    "electron": "^33.2.1"
   },
   "build": {
     "appId": "com.unweave.studio",
