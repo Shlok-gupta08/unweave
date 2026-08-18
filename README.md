@@ -6,71 +6,76 @@
 
 <p align="center">
   <strong>Visualize the layers. Isolate the sound. Produce without limits.</strong><br/>
-  AI Audio Stem Separation • Multi-Track DAW Timeline • Live Studio Mixer • 360° 8D Binaural Spatial Soundstage
+  AI Audio Stem Separation &bull; Multi-Track DAW Timeline &bull; Live Studio Mixer &bull; 360&deg; 8D Binaural Spatial Soundstage
 </p>
 
 <p align="center">
-  <a href="#-quick-start"><img src="https://img.shields.io/badge/Quick_Start-blue?style=for-the-badge" alt="Quick Start"></a>
+  <a href="#quick-start"><img src="https://img.shields.io/badge/Quick_Start-blue?style=for-the-badge" alt="Quick Start"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License"></a>
-  <a href="#-hardware-acceleration"><img src="https://img.shields.io/badge/GPU-Accelerated-orange?style=for-the-badge" alt="GPU Accelerated"></a>
-  <a href="#-native-macos-desktop-app--dmg"><img src="https://img.shields.io/badge/macOS-DMG_Ready-purple?style=for-the-badge" alt="macOS DMG Ready"></a>
+  <a href="#hardware-acceleration"><img src="https://img.shields.io/badge/GPU-Accelerated-orange?style=for-the-badge" alt="GPU Accelerated"></a>
+  <a href="#native-desktop-applications-macos--windows"><img src="https://img.shields.io/badge/macOS-DMG_Ready-purple?style=for-the-badge" alt="macOS DMG Ready"></a>
 </p>
 
 <p align="center">
-  Upload any audio track and isolate <strong>Bass, Drums, Other, Vocals, Guitar & Piano</strong>.<br/>
-  Full-featured standalone DAW workspace with Multi-Track Timeline Sequencing, Studio Mixer Console, 360° 8D Spatial Audio Mixer, and Master Mixdown Export.
+  Upload any audio track and isolate <strong>Bass, Drums, Other, Vocals, Guitar &amp; Piano</strong>.<br/>
+  Full-featured standalone DAW workspace with Multi-Track Timeline Sequencing, Studio Mixer Console, 360&deg; 8D Spatial Audio Mixer, and Master Mixdown Export.
 </p>
 
 ---
 
-## ✨ Major Features
+## Major Features
 
-### 🧠 6-Stem AI Separation Engine & Quality Presets
-- 🧬 **6-Stem AI Separation** — Powered by `htdemucs_6s` (Hybrid Transformer Demucs) for studio-grade isolation of **Bass, Drums, Other, Vocals, Guitar, and Piano**.
-- 🎚️ **Separation Quality Presets** —
-  - **Good Quality** *(Fast & Efficient)*: Standard studio separation with clean stem isolation and balanced fidelity.
+### 6-Stem AI Separation Engine &amp; Quality Presets
+
+- **6-Stem AI Separation** — Powered by `htdemucs_6s` (Hybrid Transformer Demucs) for studio-grade isolation of **Bass, Drums, Other, Vocals, Guitar, and Piano**.
+- **Separation Quality Presets**
+  - **Good Quality** *(Fast &amp; Efficient)*: Standard studio separation with clean stem isolation and balanced fidelity.
   - **Better Quality** *(High Detail)*: Enhanced multi-shift averaging, sharper frequency definition, and reduced vocal bleed.
   - **Best Quality** *(Studio Master)*: Maximum deep-learning shift averaging with pristine clarity and zero phase artifacts.
-- 🛡️ **Memory-Curtailed Sequential Queue** — Single-worker execution pipeline processes multi-song batches sequentially with model caching to prevent RAM thrashing and OS freezes.
-- 💾 **Persistent Source & Stem Caching** — Audio files and stems are cached directly in persistent IndexedDB and local disk storage, eliminating re-upload prompts on browser reload or application restart.
-- ⚡ **Multi-Hardware Acceleration** — Instant acceleration on Apple Silicon (MPS), NVIDIA (CUDA), AMD (DirectML/ROCm), or CPU fallback.
+- **Memory-Curtailed Sequential Queue** — Single-worker execution pipeline processes multi-song batches sequentially with model caching to prevent RAM thrashing and OS freezes.
+- **Persistent Source &amp; Stem Caching** — Audio files and stems are cached directly in persistent IndexedDB and local disk storage, eliminating re-upload prompts on browser reload or application restart.
+- **Multi-Hardware Acceleration** — Instant acceleration on Apple Silicon (MPS), NVIDIA (CUDA), AMD (DirectML/ROCm), or CPU fallback.
 
-### ⏱️ Multi-Track DAW Timeline Editor
-- 🎹 **Multi-Track Audio Sequencing** — Add, arrange, trim, and split audio clips across independent color-coded tracks in canonical order (`Bass` $\rightarrow$ `Drums` $\rightarrow$ `Other` $\rightarrow$ `Vocals` $\rightarrow$ `Guitar` $\rightarrow$ `Piano`).
-- 📌 **Persistent Track Headers** — Track titles, solo/mute buttons, and color badges stay permanently visible while scrolling horizontally across complex arrangements.
-- 🧲 **Magnetic Snapping Grid** — Configurable snap intervals (`0.1s`, `0.5s`, `1.0s`, or `Free/Off`) for seamless clip positioning.
-- ✂️ **Precision Audio Editing** — Clip trimming handles, playhead splitting (`S` / `⌘+K`), gain adjustment, and single-stem routing directly into timeline tracks.
-- 🏊 **Media Pool** — Drag and drop stems from different library songs directly into active timeline arrangements with automatic buffer duration decoding and waveform precomputation.
-- 📍 **Smart Playhead Auto-Follow** — Viewport smoothly tracks playback across long sessions without interfering with manual scrolling.
+### Multi-Track DAW Timeline Editor
 
-### 🎚️ Live Studio Mixer Console
-- 🎛️ **Ergonomic Channel Strips** — Dedicated strips for Bass, Drums, Other, Vocals, Guitar, and Piano with high-visibility stem color badges.
-- 🎚️ **Calibrated Decibel Faders** — Logarithmically calibrated volume sliders aligning precisely with standard studio decibel scales (`+3.5 dB` to `-\infty dB`).
-- 📊 **60fps Real-Time Stereo VU Meters** — Live dynamic peak and RMS level metering powered by the Web Audio API.
-- 🎛️ **3-Band Parametric EQ & Pan** — Independent High (10kHz), Mid (1kHz), Low (80Hz) gain controls ($\pm 12\text{ dB}$) and stereo balance.
-- 🔇 **Mutually Exclusive Mute & Solo** — Smart soloing and muting workflows with master peak limiter protection.
+- **Multi-Track Audio Sequencing** — Add, arrange, trim, and split audio clips across independent color-coded tracks in canonical order (`Bass` $\rightarrow$ `Drums` $\rightarrow$ `Other` $\rightarrow$ `Vocals` $\rightarrow$ `Guitar` $\rightarrow$ `Piano`).
+- **Persistent Track Headers** — Track titles, solo/mute buttons, and color badges stay permanently visible while scrolling horizontally across complex arrangements.
+- **Magnetic Snapping Grid** — Configurable snap intervals (`0.1s`, `0.5s`, `1.0s`, or `Free/Off`) for seamless clip positioning.
+- **Precision Audio Editing** — Clip trimming handles, playhead splitting (`S` / `Cmd+K`), gain adjustment, and single-stem routing directly into timeline tracks.
+- **Media Pool** — Drag and drop stems from different library songs directly into active timeline arrangements with automatic buffer duration decoding and waveform precomputation.
+- **Smart Playhead Auto-Follow** — Viewport smoothly tracks playback across long sessions without interfering with manual scrolling.
 
-### 🌐 360° 8D Binaural Spatial Audio Mixer & Visualizer
-- 🎧 **Binaural Spatial Orbiting** — Transform isolated stems into an immersive 8D surround soundfield using real-time HRTF pan and delay modeling.
-- 🧩 **4 Consolidated Spatial Modules** —
-  1. **Bass & Drums (Rhythm)**: Low-end foundation, default locked to Mono Center.
-  2. **Other & Ambience (Atmosphere)**: Ambient bed & background FX, default Clockwise 360° orbit.
-  3. **Vocals & Lead (Voice)**: Surround lead vocals, default Counter-Clockwise 360° orbit (`direction: -1`, `radius: 2.2m`, `speed: 10s`).
-  4. **Guitar & Piano (Harmonics)**: Melodic harmonics, default Clockwise 360° orbit.
-- 🛰️ **360° Radar Canvas Visualizer** — Interactive radar map with all 4 quadrants (Front-Left, Front-Right, Back-Left, Back-Right) and glowing audio nodes.
-- ☁️ **Dynamic Trailing Clouds** — Nodes cast smooth trailing streamer clouds while in motion that smoothly collapse into glowing aura blobs when paused.
-- 🖐️ **Direct Drag-to-Adjust Interaction** — Click and drag any stem node in the visualizer to dynamically set its orbital radius, with auto-lock to centered mono.
-- 🎛️ **Dual-Mode Audio Routing** — Pure original stereo routing in Timeline and Mixer, switching dynamically to real-time 8D HRTF binaural rendering with acoustic preprocessing in the Spatial Mixer.
+### Live Studio Mixer Console
 
-### 🚀 Studio Export Hub
-- 💾 **Multi-Format Export** — Studio-quality Lossless WAV (16/24/32-bit PCM) or High-Bitrate MP3 (128/192/256/320 kbps).
-- 🎚️ **Custom Stem Mixdowns** — Selectively toggle which active tracks to include in the rendered master file.
-- 📦 **Bulk ZIP Packaging** — Export all individual isolated stems in a clean `.zip` archive.
-- 🔁 **Loop Region Render** — Export specific timeline loop bounds or complete master arrangements.
+- **Ergonomic Channel Strips** — Dedicated strips for Bass, Drums, Other, Vocals, Guitar, and Piano with high-visibility stem color badges.
+- **Calibrated Decibel Faders** — Logarithmically calibrated volume sliders aligning precisely with standard studio decibel scales (`+3.5 dB` to `-inf dB`).
+- **60fps Real-Time Stereo VU Meters** — Live dynamic peak and RMS level metering powered by the Web Audio API.
+- **3-Band Parametric EQ &amp; Pan** — Independent High (10kHz), Mid (1kHz), Low (80Hz) gain controls ($\pm 12\text{ dB}$) and stereo balance.
+- **Mutually Exclusive Mute &amp; Solo** — Smart soloing and muting workflows with master peak limiter protection.
+
+### 360&deg; 8D Binaural Spatial Audio Mixer &amp; Visualizer
+
+- **Binaural Spatial Orbiting** — Transform isolated stems into an immersive 8D surround soundfield using real-time HRTF pan and delay modeling.
+- **4 Consolidated Spatial Modules**
+  1. **Bass &amp; Drums (Rhythm)**: Low-end foundation, default locked to Mono Center.
+  2. **Other &amp; Ambience (Atmosphere)**: Ambient bed &amp; background FX, default Clockwise 360&deg; orbit.
+  3. **Vocals &amp; Lead (Voice)**: Surround lead vocals, default Counter-Clockwise 360&deg; orbit (`direction: -1`, `radius: 2.2m`, `speed: 10s`).
+  4. **Guitar &amp; Piano (Harmonics)**: Melodic harmonics, default Clockwise 360&deg; orbit.
+- **360&deg; Radar Canvas Visualizer** — Interactive radar map with all 4 quadrants (Front-Left, Front-Right, Back-Left, Back-Right) and glowing audio nodes.
+- **Dynamic Trailing Clouds** — Nodes cast smooth trailing streamer clouds while in motion that smoothly collapse into glowing aura blobs when paused.
+- **Direct Drag-to-Adjust Interaction** — Click and drag any stem node in the visualizer to dynamically set its orbital radius, with auto-lock to centered mono.
+- **Dual-Mode Audio Routing** — Pure original stereo routing in Timeline and Mixer, switching dynamically to real-time 8D HRTF binaural rendering with acoustic preprocessing in the Spatial Mixer.
+
+### Studio Export Hub
+
+- **Multi-Format Export** — Studio-quality Lossless WAV (16/24/32-bit PCM) or High-Bitrate MP3 (128/192/256/320 kbps).
+- **Custom Stem Mixdowns** — Selectively toggle which active tracks to include in the rendered master file.
+- **Bulk ZIP Packaging** — Export all individual isolated stems in a clean `.zip` archive.
+- **Loop Region Render** — Export specific timeline loop bounds or complete master arrangements.
 
 ---
 
-## 🏗️ Architecture & Audio Routing
+## Architecture &amp; Audio Routing
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -101,7 +106,7 @@
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 Unweave/
@@ -147,9 +152,9 @@ Unweave/
 ├── scripts/                        # Build & Packaging Utilities
 │   ├── package-mac.sh              # Standalone macOS .app & .dmg packaging script
 │   ├── package-win.sh              # Standalone Windows .exe & portable zip packager
-│   ├── install-mac.sh              # 1-click macOS setup script
-│   ├── install.sh                  # 1-click Linux setup script
-│   └── install.ps1                 # 1-click Windows setup script
+│   ├── install-mac.sh              # One-click macOS setup script
+│   ├── install.sh                  # One-click Linux setup script
+│   └── install.ps1                 # One-click Windows setup script
 │
 ├── .github/
 │   └── workflows/
@@ -158,9 +163,9 @@ Unweave/
 │
 ├── dist-desktop/                   # Packaged Desktop Artifacts (ignored by git)
 │   ├── Unweave.app                 # macOS Application bundle
-│   ├── Unweave.dmg                 # macOS Installer disk image (102 MB)
+│   ├── Unweave.dmg                 # macOS Installer disk image (~102 MB)
 │   ├── Unweave-win32-x64/          # Windows Application Directory
-│   └── Unweave-Windows-x64.zip     # Windows Portable Distribution Package (129 MB)
+│   └── Unweave-Windows-x64.zip     # Windows Portable Distribution Package (~129 MB)
 │
 ├── docker-compose.yml              # Multi-container orchestration (GPU / CPU)
 ├── package.json                    # Workspace root scripts
@@ -169,86 +174,92 @@ Unweave/
 
 ---
 
-## ⚡ Hardware Acceleration
+## Hardware Acceleration
 
 | Device / GPU | Backend | Supported OS | Processing Speed |
 |--------------|---------|--------------|------------------|
-| Apple Silicon (MPS) | `mps` | macOS | ⚡⚡⚡ (Fastest on Mac) |
-| NVIDIA (CUDA) | `cuda` | Windows, Linux | ⚡⚡⚡ (Ultra Fast) |
-| AMD (DirectML / ROCm) | `directml` / `rocm` | Windows, Linux | ⚡⚡ (Fast) |
-| CPU Fallback | `cpu` | All platforms | 🐢 (Reliable) |
+| Apple Silicon (MPS) | `mps` | macOS | Fastest on Mac |
+| NVIDIA (CUDA) | `cuda` | Windows, Linux | Ultra Fast |
+| AMD (DirectML / ROCm) | `directml` / `rocm` | Windows, Linux | Fast |
+| CPU Fallback | `cpu` | All platforms | Reliable |
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Web Application
 
-1. **Backend:**
-   ```bash
-   cd backend
-   python3 -m venv .venv
-   source .venv/bin/activate   # On Windows: .venv\Scripts\activate
-   pip install -r requirements.txt
-   python -m uvicorn main:app --reload --port 8010
-   ```
+**Backend:**
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python -m uvicorn main:app --reload --port 8010
+```
 
-2. **Frontend:**
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
+**Frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-- 🎨 **UI:** `http://localhost:5180` (or `http://localhost:5173`)
-- 🔧 **API:** `http://localhost:8010`
-- 💚 **Health Check:** `http://localhost:8010/api/health`
+- **UI:** `http://localhost:5180` (or `http://localhost:5173`)
+- **API:** `http://localhost:8010`
+- **Health Check:** `http://localhost:8010/api/health`
 
 ---
 
-## 📦 Native Desktop Applications (macOS & Windows)
+## Native Desktop Applications (macOS &amp; Windows)
 
-### macOS (.app & .dmg)
+### macOS (.app &amp; .dmg)
+
 Build the standalone macOS App bundle and lightweight `.dmg` installer with on-demand AI runtime:
 ```bash
 npm run desktop:dmg
 # or: bash scripts/package-mac.sh
 ```
-**Output:**
-- `dist-desktop/Unweave.app` (Standalone macOS App Bundle)
-- `dist-desktop/Unweave.dmg` (Installer Disk Image — 102 MB)
 
-### Windows (.exe & Portable ZIP)
+**Output:**
+- `dist-desktop/Unweave.app` — Standalone macOS App Bundle
+- `dist-desktop/Unweave.dmg` — Installer Disk Image (~102 MB)
+
+> **First Launch:** On a new machine the app will automatically download and configure Python dependencies the first time it opens. This requires an internet connection and takes approximately 2&ndash;5 minutes.
+
+### Windows (.exe &amp; Portable ZIP)
+
 Build the standalone Windows executable and portable distribution archive:
 ```bash
 npm run desktop:win
 # or: bash scripts/package-win.sh
 ```
+
 **Output:**
-- `dist-desktop/Unweave-win32-x64/Unweave.exe` (Windows Executable)
-- `dist-desktop/Unweave-Windows-x64.zip` (Portable Package — 129 MB)
+- `dist-desktop/Unweave-win32-x64/Unweave.exe` — Windows Executable
+- `dist-desktop/Unweave-Windows-x64.zip` — Portable Package (~129 MB)
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## Keyboard Shortcuts
 
 | Shortcut (macOS) | Shortcut (Win/Linux) | Action |
 |------------------|----------------------|--------|
 | `Space` | `Space` | Play / Pause playback |
-| `S` or `⌘ + K` / `⌘ + B` | `S` or `Ctrl + K` / `Ctrl + B` | Split clip at playhead |
-| `⌘ + M` | `Ctrl + M` | Quick-merge selected layers |
-| `⌘ + Z` | `Ctrl + Z` | Undo |
-| `⌘ + ⇧ + Z` / `⌘ + Y` | `Ctrl + ⇧ + Z` / `Ctrl + Y` | Redo |
-| `⌘ + A` | `Ctrl + A` | Select all clips |
+| `S` or `Cmd + K` | `S` or `Ctrl + K` | Split clip at playhead |
+| `Cmd + M` | `Ctrl + M` | Quick-merge selected layers |
+| `Cmd + Z` | `Ctrl + Z` | Undo |
+| `Cmd + Shift + Z` | `Ctrl + Shift + Z` | Redo |
+| `Cmd + A` | `Ctrl + A` | Select all clips |
 | `Delete` / `Backspace` | `Delete` / `Backspace` | Remove selected clip(s) |
 | `Escape` | `Escape` | Deselect all |
-| `←` / `→` | `←` / `→` | Seek 1s backward / forward (5s with `Shift`) |
-| `0` / `Home` | `0` / `Home` | Rewind to start (`0:00.00`) |
+| `Left` / `Right` | `Left` / `Right` | Seek 1s backward / forward (5s with `Shift`) |
+| `0` / `Home` | `0` / `Home` | Rewind to start |
 | `L` | `L` | Toggle Loop playback |
-| `⌘ + 1..5` | `Ctrl + 1..5` | Switch workspace tabs |
+| `Cmd + 1..5` | `Ctrl + 1..5` | Switch workspace tabs |
 
 ---
 
-## 📄 License
+## License
 
-Distributed under the MIT License. See [LICENSE](LICENSE) for more details.
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.

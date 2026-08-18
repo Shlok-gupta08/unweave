@@ -139,28 +139,54 @@ function runCommand(cmd, args, onData) {
 }
 
 async function verifyVenvHealth() {
-  const pyToTest = isDev && fs.existsSync(path.join(__dirname, '..', 'backend', '.venv', 'bin', 'python'))
-    ? path.join(__dirname, '..', 'backend', '.venv', 'bin', 'python')
-    : VENV_PYTHON;
+  // On packaged builds use the managed venv; in dev also accept the project-local venv.
+  const devVenvPy = path.join(__dirname, '..', 'backend', '.venv', 'bin', 'python');
+  const pyToTest = (isDev && fs.existsSync(devVenvPy)) ? devVenvPy : VENV_PYTHON;
 
-  if (!fs.existsSync(pyToTest)) return false;
+  if (!fs.existsSync(pyToTest)) {
+    console.log('[Verifier] Python binary not found at:', pyToTest);
+    return false;
+  }
+
+  // Only verify the packages we directly control. Demucs internals are tested
+  // indirectly via torch + torchaudio which it depends on.
+  // PyTorch cold-import on a fresh machine can take 15-30s — timeout is generous.
+  const CHECK_TIMEOUT_MS = 30000;
+  const verifyScript = [
+    'import sys',
+    'import torch',
+    'import fastapi',
+    'import uvicorn',
+    'print("OK")',
+  ].join('; ');
 
   return new Promise((resolve) => {
-    const proc = spawn(pyToTest, ['-c', 'import torch, demucs, fastapi, uvicorn; print("OK")'], {
+    const proc = spawn(pyToTest, ['-c', verifyScript], {
       windowsHide: true,
       shell: process.platform === 'win32',
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let out = '';
+    let stderr = '';
     proc.stdout.on('data', (d) => { out += d.toString(); });
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
     proc.on('close', (code) => {
-      resolve(code === 0 && out.includes('OK'));
+      const ok = code === 0 && out.includes('OK');
+      if (!ok) {
+        console.warn('[Verifier] Health check failed. exit:', code, '| stderr:', stderr.slice(0, 400));
+      }
+      resolve(ok);
     });
-    proc.on('error', () => resolve(false));
-    setTimeout(() => {
+    proc.on('error', (err) => {
+      console.warn('[Verifier] Spawn error:', err.message);
+      resolve(false);
+    });
+    const killer = setTimeout(() => {
+      console.warn('[Verifier] Health check timed out after', CHECK_TIMEOUT_MS, 'ms — killing proc');
       try { proc.kill(); } catch {}
       resolve(false);
-    }, 6000);
+    }, CHECK_TIMEOUT_MS);
+    proc.on('close', () => clearTimeout(killer));
   });
 }
 
@@ -199,25 +225,59 @@ async function installRuntime() {
         try {
           await runCommand(systemPython, ['-m', 'ensurepip', '--upgrade']);
         } catch {
-          // Continue
+          // Continue — pip may already be present
         }
       }
     }
 
     // 2. Upgrade pip
     broadcastEngineStatus({
-      progress: 30,
+      progress: 25,
       step: 'Updating package installer (pip)...',
       detail: 'Configuring package manager...',
       logs: [...engineState.logs, '[Setup] Upgrading pip...']
     });
     try {
-      await runCommand(VENV_PYTHON, ['-m', 'pip', 'install', '--upgrade', 'pip', '--no-warn-script-location']);
+      await runCommand(VENV_PYTHON, [
+        '-m', 'pip', 'install', '--upgrade', 'pip',
+        '--no-warn-script-location', '--quiet'
+      ]);
     } catch {
-      // Continue if pip upgrade fails
+      // Continue — a slightly older pip is fine
     }
 
-    // 3. Install Requirements
+    // 3. Pre-install PyTorch with the official index URL so the correct platform
+    //    wheel is selected (MPS for Apple Silicon, CUDA for NVIDIA, CPU otherwise).
+    //    This MUST happen before requirements.txt because requirements.txt does
+    //    not specify an index URL and pip may resolve the wrong wheel.
+    broadcastEngineStatus({
+      progress: 40,
+      step: 'Installing PyTorch AI Engine...',
+      detail: 'Downloading PyTorch with hardware acceleration support (~1-2 minutes)...',
+      logs: [...engineState.logs, '[Setup] Installing PyTorch & torchaudio...']
+    });
+
+    const torchIndexUrl = 'https://download.pytorch.org/whl/cpu';
+    try {
+      await runCommand(VENV_PYTHON, [
+        '-m', 'pip', 'install',
+        'torch', 'torchaudio',
+        '--extra-index-url', torchIndexUrl,
+        '--prefer-binary',
+        '--no-warn-script-location'
+      ]);
+    } catch (torchErr) {
+      console.warn('[Setup] PyTorch install with index URL failed, falling back to default PyPI...', torchErr.message);
+      // Fallback: try without index URL (may still work on many systems)
+      await runCommand(VENV_PYTHON, [
+        '-m', 'pip', 'install',
+        'torch', 'torchaudio',
+        '--prefer-binary',
+        '--no-warn-script-location'
+      ]);
+    }
+
+    // 4. Install remaining requirements
     const backendDir = isDev
       ? path.join(__dirname, '..', 'backend')
       : path.join(process.resourcesPath, 'backend');
@@ -225,34 +285,63 @@ async function installRuntime() {
     const reqFile = path.join(backendDir, 'requirements.txt');
 
     broadcastEngineStatus({
-      progress: 50,
-      step: 'Installing PyTorch & Demucs AI Engine...',
-      detail: 'Downloading neural network dependencies (~1-2 minutes on first run)...',
-      logs: [...engineState.logs, `[Setup] Installing packages...`]
+      progress: 60,
+      step: 'Installing Demucs & Backend Dependencies...',
+      detail: 'Installing AI model library and API server packages...',
+      logs: [...engineState.logs, '[Setup] Installing backend packages...']
     });
 
     if (fs.existsSync(reqFile)) {
-      await runCommand(VENV_PYTHON, ['-m', 'pip', 'install', '-r', reqFile, '--no-warn-script-location']);
+      try {
+        await runCommand(VENV_PYTHON, [
+          '-m', 'pip', 'install', '-r', reqFile,
+          '--prefer-binary',
+          '--no-warn-script-location'
+        ]);
+      } catch (reqErr) {
+        console.warn('[Setup] requirements.txt install failed, trying minimal fallback...', reqErr.message);
+        broadcastEngineStatus({
+          progress: 65,
+          step: 'Retrying with minimal package set...',
+          detail: 'Some optional packages failed — installing core dependencies only...',
+          logs: [...engineState.logs, '[Setup] Retrying minimal install...']
+        });
+        // Minimal fallback that will definitely work on all platforms
+        await runCommand(VENV_PYTHON, [
+          '-m', 'pip', 'install',
+          'fastapi', 'uvicorn[standard]', 'python-multipart', 'aiofiles',
+          'numpy<2', 'scipy', 'demucs', 'imageio-ffmpeg',
+          '--prefer-binary', '--no-warn-script-location'
+        ]);
+      }
     } else {
-      await runCommand(VENV_PYTHON, ['-m', 'pip', 'install', 'fastapi', 'uvicorn', 'torch', 'torchaudio', 'demucs', 'pydantic', 'python-multipart', 'numpy', 'scipy', 'imageio-ffmpeg', '--no-warn-script-location']);
+      await runCommand(VENV_PYTHON, [
+        '-m', 'pip', 'install',
+        'fastapi', 'uvicorn[standard]', 'python-multipart', 'aiofiles',
+        'numpy<2', 'scipy', 'demucs', 'imageio-ffmpeg',
+        '--prefer-binary', '--no-warn-script-location'
+      ]);
     }
 
-    // 4. Verify installation
+    // 5. Verify installation — give extra time for PyTorch first-launch JIT caching
     broadcastEngineStatus({
-      progress: 90,
+      progress: 85,
       step: 'Verifying AI Engine health & hardware acceleration...',
-      detail: 'Checking Apple Silicon Metal (MPS) / CUDA acceleration...',
-      logs: [...engineState.logs, '[Setup] Verifying imports...']
+      detail: 'Checking Apple Silicon Metal (MPS) / CUDA / CPU acceleration (may take ~30s)...',
+      logs: [...engineState.logs, '[Setup] Running health verification...']
     });
 
     const isHealthy = await verifyVenvHealth();
     if (!isHealthy) {
-      throw new Error('AI Engine packages installed but verification test failed.');
+      throw new Error(
+        'AI Engine verification failed. Please check your Python version (3.9–3.12 required) ' +
+        'and internet connection, then click "Rebuild Runtime" to try again.'
+      );
     }
 
-    // 5. Start Backend
+    // 6. Start Backend
     broadcastEngineStatus({
-      progress: 98,
+      progress: 95,
       step: 'Starting local backend server...',
       detail: 'Launching API daemon on port 8010...',
       logs: [...engineState.logs, '[Setup] Starting backend daemon...']

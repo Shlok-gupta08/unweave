@@ -1,20 +1,22 @@
 # Contributing to Unweave
 
-Thank you for your interest in contributing to Unweave! 🎵
+Thank you for your interest in contributing to Unweave.
 
 ## Getting Started
 
-1. **Fork** the repository on GitHub
+1. **Fork** the repository on GitHub.
 2. **Clone** your fork:
    ```bash
    git clone https://github.com/Shlok-gupta08/unweave.git
    cd unweave
    ```
-3. **Install dependencies** using the one-click installer for your OS — see [docs/INSTALLATION.md](docs/INSTALLATION.md)
+3. **Install dependencies** using the one-click installer for your OS — see [docs/INSTALLATION.md](docs/INSTALLATION.md).
 4. **Create a feature branch**:
    ```bash
-   git checkout -b feature/my-awesome-feature
+   git checkout -b feature/my-feature
    ```
+
+---
 
 ## Development Workflow
 
@@ -25,6 +27,7 @@ npm run dev
 ```
 
 This concurrently starts:
+
 - **Frontend** dev server at `http://localhost:5180` (or `http://localhost:5173` with Vite + HMR)
 - **Backend** API server at `http://localhost:8010` (FastAPI + Uvicorn)
 
@@ -32,11 +35,11 @@ This concurrently starts:
 
 ```
 unweave/
-├── frontend/                  # React 19 + Vite 7 + Tailwind CSS DAW Application
+├── frontend/                  # React 19 + Vite + TypeScript DAW Application
 │   ├── public/                # Static icons, logos, and runtime config
 │   └── src/
 │       ├── components/
-│       │   ├── separator/     # AI Stem separation workspace & batch queue
+│       │   ├── separator/     # AI stem separation workspace & batch queue
 │       │   ├── timeline/      # Multi-track DAW timeline, tracks, clips & MediaPool
 │       │   ├── mixer/         # Live mixer console, log dB faders & 60fps VU meters
 │       │   ├── spatial/       # 360° 8D spatial audio mixer & radar visualizer
@@ -63,13 +66,13 @@ unweave/
 ├── scripts/                   # Automated OS installers & desktop packagers
 │   ├── package-mac.sh         # Standalone macOS .app & .dmg packaging script
 │   ├── package-win.sh         # Standalone Windows .exe & portable zip packager
-│   ├── install-mac.sh         # 1-click macOS setup script
-│   ├── install.sh             # 1-click Linux setup script
-│   └── install.ps1            # 1-click Windows setup script
+│   ├── install-mac.sh         # One-click macOS setup script
+│   ├── install.sh             # One-click Linux setup script
+│   └── install.ps1            # One-click Windows setup script
 ├── .github/
 │   └── workflows/
 │       ├── deploy.yml         # Azure CI/CD deployment workflow (paused)
-│       └── release-dmg.yml     # Automated macOS & Windows Release Packager
+│       └── release-dmg.yml    # Automated macOS & Windows Release Packager
 ├── dist-desktop/              # Packaged macOS & Windows binaries (git-ignored)
 ├── docker-compose.yml         # Multi-container orchestration (GPU / CPU)
 ├── package.json               # Root workspace scripts
@@ -77,19 +80,25 @@ unweave/
 └── LICENSE                    # MIT License
 ```
 
+---
+
 ## Code Style
 
 ### Frontend (TypeScript / React)
-- Use **functional components** with React hooks — no class components
-- Follow existing patterns in `src/components/`
-- All UI must be responsive — test your changes on both desktop and **mobile viewport widths** (e.g., iPhone 14 in Chrome DevTools)
-- Run `npm run lint` before committing
+
+- Use functional components with React hooks — no class components.
+- Follow existing patterns in `src/components/`.
+- All UI must be responsive — test your changes on both desktop and mobile viewport widths.
+- Run `npm run lint` before committing.
 
 ### Backend (Python)
-- Follow **PEP 8** code style
-- Use type hints throughout
-- Keep `main.py` focused; extract utilities to separate modules as needed
-- Mark CPU-intensive operations as background tasks and use the worker process pattern already in place
+
+- Follow **PEP 8** code style.
+- Use type hints throughout.
+- Keep `main.py` focused; extract utilities to separate modules as needed.
+- Mark CPU-intensive operations as background tasks and use the worker process pattern already in place.
+
+---
 
 ## Submitting Changes
 
@@ -101,18 +110,23 @@ unweave/
    ```
 2. **Push** your branch:
    ```bash
-   git push origin feature/my-awesome-feature
+   git push origin feature/my-feature
    ```
-3. **Open a Pull Request** targeting `main`
-4. Describe your changes clearly and link any related issues
+3. **Open a Pull Request** targeting `main`.
+4. Describe your changes clearly and link any related issues.
+
+---
 
 ## Reporting Issues
 
 Use [GitHub Issues](https://github.com/Shlok-gupta08/unweave/issues) and include:
-- **OS** and GPU type
-- **Python** and **Node** versions
-- **Error logs** from the terminal
+
+- OS and GPU type
+- Python and Node versions
+- Error logs from the terminal
 - For audio processing bugs: input file format, size, and approximate duration
+
+---
 
 ## License
 
